@@ -36,3 +36,6 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+.mirror {
+  transform: scaleX(-1);
+}

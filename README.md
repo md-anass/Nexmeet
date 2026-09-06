@@ -41,3 +41,7 @@ For email confirmation, use this confirmation email template URL:
 ```text
 {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
 ```
+
+## Manual Regression Check
+
+O. During an active two-person call, participant B refreshes the browser. Participant A may briefly see B disappear, but B must automatically reconnect using the same participant session and identity, without showing the manual Join Meeting screen or creating a permanent duplicate participant.

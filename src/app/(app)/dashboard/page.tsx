@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAuthenticatedUser } from "@/lib/supabase/server";
+import { CreateMeetingForm } from "@/components/shared/create-meeting-form";
+import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
-  const displayName = user.user_metadata?.full_name;
+  const supabase = await createSupabaseServerClient();
+  const { data: profile } = supabase
+    ? await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const displayName = profile?.display_name?.trim() || user.email?.split("@")[0] || "there";
 
   return (
     <main className="min-h-screen px-6 py-6 sm:px-10">
@@ -23,9 +28,9 @@ export default async function DashboardPage() {
           <p className="text-sm font-medium text-slate-500">Your NexMeet space</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">{displayName ? `Welcome, ${displayName}` : "Welcome to NexMeet"}</h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">Your private meeting workspace is ready. Create or join a meeting when that feature is available.</p>
+          <CreateMeetingForm />
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button type="button" className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800">Create Meeting</button>
-            <button type="button" className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 hover:border-slate-300">Join Meeting</button>
+            <span className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-400">Join Meeting coming next</span>
           </div>
         </section>
       </div>
