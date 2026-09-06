@@ -7,6 +7,7 @@ import { NexMeetBrand } from "@/components/brand/nexmeet-brand";
 import { MeetingControls } from "@/components/meeting/meeting-controls";
 import { MeetingStage } from "@/components/meeting/meeting-stage";
 import { MeetingTopBar } from "@/components/meeting/meeting-top-bar";
+import { ParticipantsPanel } from "@/components/meeting/participants-panel";
 import { NexMeetMeetingLoader } from "@/components/meeting/nexmeet-meeting-loader";
 import { PrejoinMediaPreview, type PrejoinMediaHandle } from "@/components/meeting/prejoin-media-preview";
 
@@ -87,6 +88,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
   const remoteParticipants = participants.filter((participant) => participant.identity !== localParticipant.identity);
   const [leaving, setLeaving] = useState(false);
   const [screenSharePending, setScreenSharePending] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const screenShareSupported = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
 
   useEffect(() => {
@@ -134,7 +136,10 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
     if (screenSharePending || !screenShareSupported) return;
     setScreenSharePending(true);
     try {
-      await localParticipant.setScreenShareEnabled(!isScreenShareEnabled);
+      await localParticipant.setScreenShareEnabled(!isScreenShareEnabled, {
+        audio: true,
+        systemAudio: "include",
+      });
     } catch {
       // Picker cancellation and unavailable capture devices are non-fatal.
     } finally {
@@ -142,7 +147,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
     }
   }
 
-  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onLeave={() => void leaveMeeting()} /></main><RoomAudioRenderer /></div>;
+  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => setPeopleOpen((open) => !open)} onLeave={() => void leaveMeeting()} />{peopleOpen && <div id="nexmeet-participants-panel"><ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} isHost={isHost} onClose={() => setPeopleOpen(false)} /></div>}<RoomAudioRenderer /></div>;
 }
 
 async function fingerprint(value: string) {
