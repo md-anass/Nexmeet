@@ -7,11 +7,11 @@ type ParticipantsPanelProps = {
   participants: Participant[];
   localParticipant: LocalParticipant;
   displayName: string;
-  isHost: boolean;
+  currentHostParticipantKey: string | null;
   onClose: () => void;
 };
 
-export function ParticipantsPanel({ participants, localParticipant, displayName, isHost, onClose }: ParticipantsPanelProps) {
+export function ParticipantsPanel({ participants, localParticipant, displayName, currentHostParticipantKey, onClose }: ParticipantsPanelProps) {
   return <>
     <button type="button" aria-label="Close participants panel" onClick={onClose} className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[2px] sm:bg-black/20" />
     <aside id="nexmeet-participants-panel" aria-label="Participants" className="fixed inset-x-0 bottom-0 z-40 flex max-h-[min(78dvh,42rem)] min-h-0 flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-[#081126]/95 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] text-white shadow-2xl shadow-black/50 backdrop-blur-xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-80 sm:rounded-none sm:border-b-0 sm:border-r-0 sm:border-t-0 sm:p-5 sm:pb-5">
@@ -32,7 +32,7 @@ export function ParticipantsPanel({ participants, localParticipant, displayName,
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-white">{name}{isLocal && <span className="ml-1.5 text-cyan-300">(You)</span>}</p>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                {isLocal && isHost && <span className="rounded-md bg-cyan-300/15 px-1.5 py-0.5 font-semibold text-cyan-200">Host</span>}
+                {participant.identity === currentHostParticipantKey && <span className="rounded-md bg-cyan-300/15 px-1.5 py-0.5 font-semibold text-cyan-200">Host</span>}
                 <span>{participant.isMicrophoneEnabled ? "Mic on" : "Mic off"}</span>
                 <span aria-hidden="true">·</span>
                 <span>{participant.isCameraEnabled ? "Camera on" : "Camera off"}</span>
