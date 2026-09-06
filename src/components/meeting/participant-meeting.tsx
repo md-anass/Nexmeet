@@ -87,6 +87,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
   const remoteParticipants = participants.filter((participant) => participant.identity !== localParticipant.identity);
   const [leaving, setLeaving] = useState(false);
   const [screenSharePending, setScreenSharePending] = useState(false);
+  const screenShareSupported = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return;
@@ -130,7 +131,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
   }
 
   async function toggleScreenShare() {
-    if (screenSharePending) return;
+    if (screenSharePending || !screenShareSupported) return;
     setScreenSharePending(true);
     try {
       await localParticipant.setScreenShareEnabled(!isScreenShareEnabled);
@@ -141,7 +142,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
     }
   }
 
-  return <div className="min-h-[100dvh] bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-28 pt-4 sm:px-7 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onLeave={() => void leaveMeeting()} /></main><RoomAudioRenderer /></div>;
+  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onLeave={() => void leaveMeeting()} /></main><RoomAudioRenderer /></div>;
 }
 
 async function fingerprint(value: string) {
