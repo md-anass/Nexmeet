@@ -1,26 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext, useTracks } from "@livekit/components-react";
-import { RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { NexMeetBrand } from "@/components/brand/nexmeet-brand";
 import { MeetingControls } from "@/components/meeting/meeting-controls";
 import { MeetingStage } from "@/components/meeting/meeting-stage";
 import { MeetingTopBar } from "@/components/meeting/meeting-top-bar";
 import { ParticipantsPanel } from "@/components/meeting/participants-panel";
+import { ChatPanel } from "@/components/meeting/chat-panel";
 import { NexMeetMeetingLoader } from "@/components/meeting/nexmeet-meeting-loader";
 import { PrejoinMediaPreview, type PrejoinMediaHandle } from "@/components/meeting/prejoin-media-preview";
+import { formatMeetingDuration } from "@/lib/meeting-lifecycle";
 
-type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; displayName: string; autoReconnect?: boolean; isHost?: boolean; shareLink?: string };
+type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; autoReconnect?: boolean; isHost?: boolean; shareLink?: string };
 type TokenResponse = { token: string; serverUrl: string };
+type MeetingEndedStatus = { status: "ended"; startedAt: string | null; endedAt: string | null };
 
-export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, autoReconnect = false, isHost = false, shareLink = "" }: ParticipantMeetingProps) {
+export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, startedAt, autoReconnect = false, shareLink = "" }: ParticipantMeetingProps) {
   const prejoinRef = useRef<PrejoinMediaHandle>(null);
   const [tokenResponse, setTokenResponse] = useState<TokenResponse | null>(null);
   const [mediaChoices, setMediaChoices] = useState({ cameraEnabled: true, microphoneEnabled: true });
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [left, setLeft] = useState(false);
+  const [endedStatus, setEndedStatus] = useState<MeetingEndedStatus | null>(null);
   const reconnectAttempted = useRef(false);
 
   useEffect(() => {
@@ -55,6 +60,8 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, aut
     return <div className="mt-8 rounded-2xl bg-slate-50 p-8 text-center"><p className="font-semibold text-slate-950">You left the meeting.</p><button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Return to lobby</button></div>;
   }
 
+  if (endedStatus) return <MeetingEndedScreen meetingTitle={meetingTitle} startedAt={endedStatus.startedAt ?? startedAt} endedAt={endedStatus.endedAt} />;
+
   if (!tokenResponse) {
     if (autoReconnect && !joinError) return <NexMeetMeetingLoader label="Reconnecting to your meeting..." />;
     return <>
@@ -66,7 +73,7 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, aut
   }
 
   return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void markParticipantStatus(meetingCode, "joined"); }} onError={(error) => { if (process.env.NODE_ENV === "development") console.warn(`[NexMeet LiveKit] connection error name=${error.name} message=${error.message}`); setJoinError("We could not connect you to the meeting."); }}>
-    <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} isHost={isHost} shareLink={shareLink} onLeft={() => setLeft(true)} />
+    <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} startedAt={startedAt} shareLink={shareLink} onLeft={() => setLeft(true)} onEnded={(status) => setEndedStatus(status)} />
   </LiveKitRoom>;
 }
 
@@ -78,7 +85,7 @@ async function markParticipantStatus(meetingCode: string, status: "joined" | "le
   });
 }
 
-function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, shareLink, onLeft }: { meetingTitle: string; displayName: string; meetingCode: string; isHost: boolean; shareLink: string; onLeft: () => void }) {
+function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, shareLink, onLeft, onEnded }: { meetingTitle: string; displayName: string; meetingCode: string; startedAt: string | null; shareLink: string; onLeft: () => void; onEnded: (status: MeetingEndedStatus) => void }) {
   const room = useRoomContext();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant();
   const participants = useParticipants();
@@ -89,6 +96,15 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
   const [leaving, setLeaving] = useState(false);
   const [screenSharePending, setScreenSharePending] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [hostCheckPending, setHostCheckPending] = useState(false);
+  const [endError, setEndError] = useState("");
+  const [currentHostParticipantKey, setCurrentHostParticipantKey] = useState<string | null>(null);
+  const hostPollInFlight = useRef(false);
+  const meetingEnded = useRef(false);
   const screenShareSupported = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
 
   useEffect(() => {
@@ -121,15 +137,105 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
     });
   }, [remoteParticipants.length, room]);
 
+  useEffect(() => {
+    let disposed = false;
+
+    async function refreshCurrentHost() {
+      if (hostPollInFlight.current) return;
+      hostPollInFlight.current = true;
+      try {
+        const response = await fetch(`/api/meetings/${meetingCode}/current-host`, { cache: "no-store" });
+        if (!response.ok || disposed) return;
+        const result = (await response.json()) as { currentHostParticipantKey?: unknown };
+        setCurrentHostParticipantKey(typeof result.currentHostParticipantKey === "string" ? result.currentHostParticipantKey : null);
+      } catch {
+        // Keep the last known host during a temporary status-request failure.
+      } finally {
+        hostPollInFlight.current = false;
+      }
+    }
+
+    void refreshCurrentHost();
+    const interval = window.setInterval(() => void refreshCurrentHost(), 2500);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [meetingCode]);
+
+  async function checkCurrentHost() {
+    try {
+      const response = await fetch(`/api/meetings/${meetingCode}/current-host`, { cache: "no-store" });
+      if (!response.ok) return undefined;
+      const result = (await response.json()) as { currentHostParticipantKey?: unknown };
+      const key = typeof result.currentHostParticipantKey === "string" ? result.currentHostParticipantKey : null;
+      setCurrentHostParticipantKey(key);
+      return key;
+    } catch {
+      return undefined;
+    }
+  }
+
+  useEffect(() => {
+    let disposed = false;
+    async function refreshMeetingStatus() {
+      try {
+        const response = await fetch(`/api/meetings/${meetingCode}/meeting-status`, { cache: "no-store" });
+        if (!response.ok || disposed) return;
+        const result = (await response.json()) as { status?: unknown; startedAt?: unknown; endedAt?: unknown };
+        if (result.status !== "ended" || meetingEnded.current) return;
+        meetingEnded.current = true;
+        await disconnectAndStopTracks(room);
+        if (!disposed) onEnded({ status: "ended", startedAt: typeof result.startedAt === "string" ? result.startedAt : startedAt, endedAt: typeof result.endedAt === "string" ? result.endedAt : null });
+      } catch {
+        // A transient status request failure should not interrupt the call.
+      }
+    }
+
+    void refreshMeetingStatus();
+    const interval = window.setInterval(() => void refreshMeetingStatus(), 2500);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [meetingCode, onEnded, room, startedAt]);
+
   async function leaveMeeting() {
     if (leaving) return;
     setLeaving(true);
-    for (const publication of room.localParticipant.trackPublications.values()) {
-      if (publication.track) await room.localParticipant.unpublishTrack(publication.track, true);
-    }
-    await room.disconnect();
+    await disconnectAndStopTracks(room);
     await markParticipantStatus(meetingCode, "left");
     onLeft();
+  }
+
+  async function endMeeting() {
+    if (ending) return;
+    setEnding(true);
+    setEndError("");
+    try {
+      const response = await fetch(`/api/meetings/${meetingCode}/end`, { method: "POST" });
+      const result = (await response.json()) as { startedAt?: unknown; endedAt?: unknown; error?: unknown };
+      if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "end_failed");
+      meetingEnded.current = true;
+      await disconnectAndStopTracks(room);
+      onEnded({ status: "ended", startedAt: typeof result.startedAt === "string" ? result.startedAt : startedAt, endedAt: typeof result.endedAt === "string" ? result.endedAt : null });
+    } catch {
+      setEndError("We could not end the meeting. Please try again.");
+      setEnding(false);
+    }
+  }
+
+  async function handleLeaveClick() {
+    if (leaving || ending || hostCheckPending) return;
+    setHostCheckPending(true);
+    const latestHostKey = await checkCurrentHost();
+    setHostCheckPending(false);
+    const hostKey = latestHostKey === undefined ? currentHostParticipantKey : latestHostKey;
+    if (hostKey === localParticipant.identity) {
+      setLeavePromptOpen(true);
+      return;
+    }
+    await leaveMeeting();
   }
 
   async function toggleScreenShare() {
@@ -150,7 +256,19 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
     }
   }
 
-  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => setPeopleOpen((open) => !open)} onLeave={() => void leaveMeeting()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} isHost={isHost} onClose={() => setPeopleOpen(false)} />}<StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer /></div>;
+  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} startedAt={startedAt} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} currentHostParticipantKey={currentHostParticipantKey} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} chatOpen={chatOpen} chatUnreadCount={chatUnreadCount} leaving={leaving || ending || hostCheckPending} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => { setPeopleOpen((open) => !open); setChatOpen(false); }} onToggleChat={() => { setChatOpen((open) => !open); setPeopleOpen(false); }} onLeave={() => void handleLeaveClick()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} currentHostParticipantKey={currentHostParticipantKey} onClose={() => setPeopleOpen(false)} />}<ChatPanel open={chatOpen} meetingCode={meetingCode} participants={participants} localParticipant={localParticipant} onClose={() => setChatOpen(false)} onUnreadChange={setChatUnreadCount} /><StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer />{leavePromptOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-5" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#081126] p-5 shadow-2xl"><h2 id="leave-meeting-title" className="text-lg font-semibold text-white">Leave meeting?</h2><p className="mt-2 text-sm text-slate-400">You are the current host.</p>{endError && <p role="alert" className="mt-3 text-sm text-red-200">{endError}</p>}<div className="mt-5 grid gap-2"><button type="button" onClick={() => { setLeavePromptOpen(false); void leaveMeeting(); }} disabled={ending || leaving} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10">Leave meeting</button><button type="button" onClick={() => void endMeeting()} disabled={ending || leaving} className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-400">{ending ? "Ending meeting..." : "End meeting for everyone"}</button><button type="button" onClick={() => { setLeavePromptOpen(false); setEndError(""); }} disabled={ending} className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-white/5">Cancel</button></div></div></div>}</div>;
+}
+
+async function disconnectAndStopTracks(room: Room) {
+  for (const publication of room.localParticipant.trackPublications.values()) {
+    if (publication.track) await room.localParticipant.unpublishTrack(publication.track, true);
+  }
+  await room.disconnect();
+}
+
+function MeetingEndedScreen({ meetingTitle, startedAt, endedAt }: { meetingTitle: string; startedAt: string | null; endedAt: string | null }) {
+  const router = useRouter();
+  return <main className="flex min-h-[100dvh] items-center justify-center bg-[#020817] px-5 py-10 text-center text-white"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl"><NexMeetBrand className="justify-center" /><p className="mt-8 text-sm font-medium text-cyan-300">{meetingTitle}</p><h1 className="mt-2 text-3xl font-semibold">Meeting ended</h1><p className="mt-5 text-sm text-slate-400">Total duration</p><p className="mt-1 text-3xl font-semibold tabular-nums text-white">{formatMeetingDuration(startedAt, endedAt) ?? "Calculating duration..."}</p><button type="button" onClick={() => router.push("/dashboard")} className="mt-8 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-200">Return to dashboard</button></div></main>;
 }
 
 async function fingerprint(value: string) {
