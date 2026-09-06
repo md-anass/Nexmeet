@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { AccessToken } from "livekit-server-sdk";
@@ -13,8 +12,7 @@ function failure(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function diagnosticFailure(stage: string, status: number, message: string) {
-  if (process.env.NODE_ENV === "development") console.warn(`[NexMeet LiveKit] token request failed stage=${stage} status=${status}`);
+function diagnosticFailure(_stage: string, status: number, message: string) {
   return failure(status, message);
 }
 
@@ -60,15 +58,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     name: session.display_name,
     ttl: "10m",
   });
-  accessToken.addGrant({ roomJoin: true, room: context.room_name, canPublish: true, canSubscribe: true });
+  accessToken.addGrant({ roomJoin: true, room: context.room_name, canPublish: true, canSubscribe: true, canUpdateOwnMetadata: true });
 
   try {
     const token = await accessToken.toJwt();
-    if (process.env.NODE_ENV === "development") {
-      const roomFingerprint = createHash("sha256").update(context.room_name, "utf8").digest("hex").slice(0, 12);
-      const participantFingerprint = createHash("sha256").update(credentials.participantKey, "utf8").digest("hex").slice(0, 12);
-      console.log(`[NexMeet LiveKit] meetingCode=${code} roomFingerprint=${roomFingerprint} participantFingerprint=${participantFingerprint} tokenIssued=yes`);
-    }
     return NextResponse.json({ token, serverUrl: config.url });
   } catch {
     return diagnosticFailure("token_generation", 500, "Unable to start the meeting.");

@@ -33,6 +33,7 @@ export function ParticipantsPanel({ participants, localParticipant, displayName,
               <p className="truncate text-sm font-medium text-white">{name}{isLocal && <span className="ml-1.5 text-cyan-300">(You)</span>}</p>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                 {participant.identity === currentHostParticipantKey && <span className="rounded-md bg-cyan-300/15 px-1.5 py-0.5 font-semibold text-cyan-200">Host</span>}
+                {participant.attributes["nexmeet.handRaised"] === "true" && <span aria-label="Hand raised" className="text-cyan-200">✋ Hand raised</span>}
                 <span>{participant.isMicrophoneEnabled ? "Mic on" : "Mic off"}</span>
                 <span aria-hidden="true">·</span>
                 <span>{participant.isCameraEnabled ? "Camera on" : "Camera off"}</span>

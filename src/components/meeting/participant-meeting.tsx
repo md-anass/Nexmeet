@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext, useTracks } from "@livekit/components-react";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent, Track, type LocalParticipant, type Participant, type RoomEventCallbacks } from "livekit-client";
 import { NexMeetBrand } from "@/components/brand/nexmeet-brand";
 import { MeetingControls } from "@/components/meeting/meeting-controls";
 import { MeetingStage } from "@/components/meeting/meeting-stage";
@@ -13,6 +13,7 @@ import { ChatPanel } from "@/components/meeting/chat-panel";
 import { NexMeetMeetingLoader } from "@/components/meeting/nexmeet-meeting-loader";
 import { PrejoinMediaPreview, type PrejoinMediaHandle } from "@/components/meeting/prejoin-media-preview";
 import { formatMeetingDuration } from "@/lib/meeting-lifecycle";
+import { HAND_RAISED_ATTRIBUTE, isReactionType, REACTION_TOPIC, type ReactionType } from "@/components/meeting/meeting-ephemeral";
 
 type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; autoReconnect?: boolean; isHost?: boolean; shareLink?: string };
 type TokenResponse = { token: string; serverUrl: string };
@@ -41,7 +42,6 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, sta
     try {
       const response = await fetch(`/api/meetings/${meetingCode}/livekit-token`, { method: "POST" });
       if (!response.ok) {
-        if (process.env.NODE_ENV === "development") console.warn(`[NexMeet LiveKit] token request failed status=${response.status} category=token_endpoint`);
         throw new Error("token_request_failed");
       }
       const nextToken = (await response.json()) as TokenResponse;
@@ -72,7 +72,7 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, sta
     </>;
   }
 
-  return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void markParticipantStatus(meetingCode, "joined"); }} onError={(error) => { if (process.env.NODE_ENV === "development") console.warn(`[NexMeet LiveKit] connection error name=${error.name} message=${error.message}`); setJoinError("We could not connect you to the meeting."); }}>
+  return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void markParticipantStatus(meetingCode, "joined"); }} onError={() => { setJoinError("We could not connect you to the meeting."); }}>
     <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} startedAt={startedAt} shareLink={shareLink} onLeft={() => setLeft(true)} onEnded={(status) => setEndedStatus(status)} />
   </LiveKitRoom>;
 }
@@ -103,39 +103,72 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, sh
   const [hostCheckPending, setHostCheckPending] = useState(false);
   const [endError, setEndError] = useState("");
   const [currentHostParticipantKey, setCurrentHostParticipantKey] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<Record<string, ReactionType>>({});
+  const [handRaised, setHandRaised] = useState(() => localParticipant.attributes[HAND_RAISED_ATTRIBUTE] === "true");
   const hostPollInFlight = useRef(false);
   const meetingEnded = useRef(false);
+  const reactionTimers = useRef<Record<string, number>>({});
+  const lastReactionAt = useRef(0);
   const screenShareSupported = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return;
-
-    const logConnectionState = async () => {
-      const roomFingerprint = await fingerprint(room.name);
-      const participantFingerprint = await fingerprint(localParticipant.identity);
-      console.log(`[NexMeet LiveKit] connectionState=${room.state} roomFingerprint=${roomFingerprint} localParticipantFingerprint=${participantFingerprint} remoteParticipantCount=${room.remoteParticipants.size}`);
+    const handleAttributesChanged = (_changed: Record<string, string>, participant: Participant | LocalParticipant) => {
+      if (participant.identity === localParticipant.identity) setHandRaised(participant.attributes[HAND_RAISED_ATTRIBUTE] === "true");
     };
-    const handleParticipantConnected = () => console.log("[NexMeet LiveKit] remote participant connected");
-    const handleParticipantDisconnected = () => console.log("[NexMeet LiveKit] remote participant disconnected");
-    const handleRoomConnected = () => { void logConnectionState(); };
+    room.on(RoomEvent.ParticipantAttributesChanged, handleAttributesChanged);
+    return () => { room.off(RoomEvent.ParticipantAttributesChanged, handleAttributesChanged); };
+  }, [localParticipant, room]);
 
-    void logConnectionState();
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-    room.on(RoomEvent.Connected, handleRoomConnected);
-    return () => {
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      room.off(RoomEvent.Connected, handleRoomConnected);
-    };
-  }, [localParticipant.identity, room]);
+  const showReaction = useCallback((identity: string, reaction: ReactionType) => {
+    const existingTimer = reactionTimers.current[identity];
+    if (existingTimer) window.clearTimeout(existingTimer);
+    setReactions((current) => ({ ...current, [identity]: reaction }));
+    reactionTimers.current[identity] = window.setTimeout(() => {
+      setReactions((current) => {
+        const next = { ...current };
+        delete next[identity];
+        return next;
+      });
+      delete reactionTimers.current[identity];
+    }, 2500);
+  }, []);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return;
-    void fingerprint(room.name).then((roomFingerprint) => {
-      console.log(`[NexMeet LiveKit] roomFingerprint=${roomFingerprint} remoteParticipantCount=${remoteParticipants.length}`);
-    });
-  }, [remoteParticipants.length, room]);
+    const handleDataReceived = (...args: Parameters<RoomEventCallbacks["dataReceived"]>) => {
+      const [payload, participant, , topic] = args;
+      if (!participant || topic !== REACTION_TOPIC) return;
+      try {
+        const value: unknown = JSON.parse(new TextDecoder().decode(payload));
+        if (!value || typeof value !== "object" || !isReactionType((value as { reaction?: unknown }).reaction)) return;
+        showReaction(participant.identity, (value as { reaction: ReactionType }).reaction);
+      } catch {
+        // Ignore malformed or unknown ephemeral payloads.
+      }
+    };
+    room.on(RoomEvent.DataReceived, handleDataReceived);
+    return () => { room.off(RoomEvent.DataReceived, handleDataReceived); };
+  }, [room, showReaction]);
+
+  async function sendReaction(reaction: ReactionType) {
+    if (Date.now() - lastReactionAt.current < 800) return;
+    lastReactionAt.current = Date.now();
+    showReaction(localParticipant.identity, reaction);
+    try {
+      await localParticipant.publishData(new TextEncoder().encode(JSON.stringify({ type: "reaction", reaction })), { topic: REACTION_TOPIC, reliable: false });
+    } catch {
+      // A transient data-channel failure should not affect the meeting.
+    }
+  }
+
+  async function toggleHand() {
+    const next = !handRaised;
+    try {
+      await localParticipant.setAttributes({ ...localParticipant.attributes, [HAND_RAISED_ATTRIBUTE]: String(next) });
+      setHandRaised(next);
+    } catch {
+      // Keep the current state if LiveKit cannot update attributes.
+    }
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -246,9 +279,6 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, sh
         audio: true,
         systemAudio: "include",
       });
-      if (process.env.NODE_ENV === "development" && !isScreenShareEnabled) {
-        console.log(`[NexMeet ScreenShare] videoPublication=${Boolean(localParticipant.getTrackPublication(Track.Source.ScreenShare))} audioPublication=${Boolean(localParticipant.getTrackPublication(Track.Source.ScreenShareAudio))}`);
-      }
     } catch {
       // Picker cancellation and unavailable capture devices are non-fatal.
     } finally {
@@ -256,7 +286,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, sh
     }
   }
 
-  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} startedAt={startedAt} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} currentHostParticipantKey={currentHostParticipantKey} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} chatOpen={chatOpen} chatUnreadCount={chatUnreadCount} leaving={leaving || ending || hostCheckPending} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => { setPeopleOpen((open) => !open); setChatOpen(false); }} onToggleChat={() => { setChatOpen((open) => !open); setPeopleOpen(false); }} onLeave={() => void handleLeaveClick()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} currentHostParticipantKey={currentHostParticipantKey} onClose={() => setPeopleOpen(false)} />}<ChatPanel open={chatOpen} meetingCode={meetingCode} participants={participants} localParticipant={localParticipant} onClose={() => setChatOpen(false)} onUnreadChange={setChatUnreadCount} /><StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer />{leavePromptOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-5" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#081126] p-5 shadow-2xl"><h2 id="leave-meeting-title" className="text-lg font-semibold text-white">Leave meeting?</h2><p className="mt-2 text-sm text-slate-400">You are the current host.</p>{endError && <p role="alert" className="mt-3 text-sm text-red-200">{endError}</p>}<div className="mt-5 grid gap-2"><button type="button" onClick={() => { setLeavePromptOpen(false); void leaveMeeting(); }} disabled={ending || leaving} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10">Leave meeting</button><button type="button" onClick={() => void endMeeting()} disabled={ending || leaving} className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-400">{ending ? "Ending meeting..." : "End meeting for everyone"}</button><button type="button" onClick={() => { setLeavePromptOpen(false); setEndError(""); }} disabled={ending} className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-white/5">Cancel</button></div></div></div>}</div>;
+  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} startedAt={startedAt} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} currentHostParticipantKey={currentHostParticipantKey} reactions={reactions} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} chatOpen={chatOpen} chatUnreadCount={chatUnreadCount} handRaised={handRaised} leaving={leaving || ending || hostCheckPending} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => { setPeopleOpen((open) => !open); setChatOpen(false); }} onToggleChat={() => { setChatOpen((open) => !open); setPeopleOpen(false); }} onToggleHand={() => void toggleHand()} onReaction={(reaction) => void sendReaction(reaction)} onLeave={() => void handleLeaveClick()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} currentHostParticipantKey={currentHostParticipantKey} onClose={() => setPeopleOpen(false)} />}<ChatPanel open={chatOpen} meetingCode={meetingCode} participants={participants} localParticipant={localParticipant} onClose={() => setChatOpen(false)} onUnreadChange={setChatUnreadCount} /><StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer />{leavePromptOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-5" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#081126] p-5 shadow-2xl"><h2 id="leave-meeting-title" className="text-lg font-semibold text-white">Leave meeting?</h2><p className="mt-2 text-sm text-slate-400">You are the current host.</p>{endError && <p role="alert" className="mt-3 text-sm text-red-200">{endError}</p>}<div className="mt-5 grid gap-2"><button type="button" onClick={() => { setLeavePromptOpen(false); void leaveMeeting(); }} disabled={ending || leaving} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10">Leave meeting</button><button type="button" onClick={() => void endMeeting()} disabled={ending || leaving} className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-400">{ending ? "Ending meeting..." : "End meeting for everyone"}</button><button type="button" onClick={() => { setLeavePromptOpen(false); setEndError(""); }} disabled={ending} className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-white/5">Cancel</button></div></div></div>}</div>;
 }
 
 async function disconnectAndStopTracks(room: Room) {
@@ -269,9 +299,4 @@ async function disconnectAndStopTracks(room: Room) {
 function MeetingEndedScreen({ meetingTitle, startedAt, endedAt }: { meetingTitle: string; startedAt: string | null; endedAt: string | null }) {
   const router = useRouter();
   return <main className="flex min-h-[100dvh] items-center justify-center bg-[#020817] px-5 py-10 text-center text-white"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl"><NexMeetBrand className="justify-center" /><p className="mt-8 text-sm font-medium text-cyan-300">{meetingTitle}</p><h1 className="mt-2 text-3xl font-semibold">Meeting ended</h1><p className="mt-5 text-sm text-slate-400">Total duration</p><p className="mt-1 text-3xl font-semibold tabular-nums text-white">{formatMeetingDuration(startedAt, endedAt) ?? "Calculating duration..."}</p><button type="button" onClick={() => router.push("/dashboard")} className="mt-8 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-200">Return to dashboard</button></div></main>;
-}
-
-async function fingerprint(value: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 12);
 }
