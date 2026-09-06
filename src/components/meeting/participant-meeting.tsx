@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant, useParticipants, useRoomContext, useTracks } from "@livekit/components-react";
+import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext, useTracks } from "@livekit/components-react";
 import { RoomEvent, Track } from "livekit-client";
 import { NexMeetBrand } from "@/components/brand/nexmeet-brand";
 import { MeetingControls } from "@/components/meeting/meeting-controls";
@@ -140,6 +140,9 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
         audio: true,
         systemAudio: "include",
       });
+      if (process.env.NODE_ENV === "development" && !isScreenShareEnabled) {
+        console.log(`[NexMeet ScreenShare] videoPublication=${Boolean(localParticipant.getTrackPublication(Track.Source.ScreenShare))} audioPublication=${Boolean(localParticipant.getTrackPublication(Track.Source.ScreenShareAudio))}`);
+      }
     } catch {
       // Picker cancellation and unavailable capture devices are non-fatal.
     } finally {
@@ -147,7 +150,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, isHost, share
     }
   }
 
-  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => setPeopleOpen((open) => !open)} onLeave={() => void leaveMeeting()} />{peopleOpen && <div id="nexmeet-participants-panel"><ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} isHost={isHost} onClose={() => setPeopleOpen(false)} /></div>}<RoomAudioRenderer /></div>;
+  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} isHost={isHost} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} leaving={leaving} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => setPeopleOpen((open) => !open)} onLeave={() => void leaveMeeting()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} isHost={isHost} onClose={() => setPeopleOpen(false)} />}<StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer /></div>;
 }
 
 async function fingerprint(value: string) {
