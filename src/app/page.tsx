@@ -20,18 +20,18 @@ export default async function Home() {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
+            <a
               href={user ? "/dashboard" : "/login"}
               className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-900/5 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
             >
               {user ? "Dashboard" : "Sign In"}
-            </Link>
-            <Link
+            </a>
+            <a
               href={user ? "/profile" : "/signup"}
               className="rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
             >
               {user ? "Profile" : "Get Started"}
-            </Link>
+            </a>
           </div>
         </header>
 
@@ -50,20 +50,20 @@ export default async function Home() {
             </p>
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Link
+              <a
                 href={user ? "/dashboard" : "/signup"}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
               >
                 Create Meeting
                 <ArrowRight className="size-4" />
-              </Link>
+              </a>
 
-              <Link
+              <a
                 href={user ? "/dashboard" : "/login"}
                 className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white/80 px-6 py-3 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
               >
                 Join Meeting
-              </Link>
+              </a>
             </div>
 
             <p className="mt-5 flex items-center gap-2 text-sm text-slate-500">

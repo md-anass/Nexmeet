@@ -20,6 +20,15 @@ export async function getParticipantAuth(code: string, request: Request): Promis
   return { supabase, participantKey: credentials.participantKey, tokenHash: hashSessionSecret(credentials.rawSecret) };
 }
 
+export async function hasActiveMeetingContext(auth: ParticipantAuth, code: string) {
+  const { data, error } = await auth.supabase.rpc("get_participant_meeting_context", {
+    requested_participant_key: auth.participantKey,
+    requested_session_token_hash: auth.tokenHash,
+    requested_meeting_code: code,
+  }).maybeSingle();
+  return !error && Boolean(data && typeof data === "object" && (data as { status?: unknown }).status === "active");
+}
+
 export function firstRpcRow(value: unknown): Record<string, unknown> | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate && typeof candidate === "object" ? candidate as Record<string, unknown> : null;

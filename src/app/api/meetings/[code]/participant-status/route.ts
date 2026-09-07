@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     requested_meeting_code: code,
   }).maybeSingle();
   const context = contextData as MeetingContextRow | null;
-  if (contextError || !context || context.meeting_id !== session.meeting_id) {
+  if (contextError || !context || context.meeting_id !== session.meeting_id || context.status !== "active") {
     return NextResponse.json({ error: "This meeting is no longer available." }, { status: 404 });
   }
 

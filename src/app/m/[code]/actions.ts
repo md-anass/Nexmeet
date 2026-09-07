@@ -1,10 +1,26 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSessionSecret, generateParticipantSelector, hashSessionSecret, validateParticipantSelector } from "@/lib/participant-session";
+import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { createSessionSecret, generateParticipantSelector, hashSessionSecret } from "@/lib/participant-session";
 import { expireParticipantCredentials, resolveParticipantCredentials, writeParticipantCredentials } from "@/lib/participant-session-server";
 import type { GuestJoinActionState } from "@/types/participant-session";
+
+export type ScheduledMeetingActionState = { error: string };
+
+export async function startScheduledMeeting(_: ScheduledMeetingActionState, formData: FormData): Promise<ScheduledMeetingActionState> {
+  const meetingCode = String(formData.get("meetingCode") ?? "");
+  if (!/^[a-z0-9]{10,16}$/.test(meetingCode)) return { error: "This meeting is unavailable." };
+  if (!await getAuthenticatedUser()) return { error: "Sign in to start this meeting." };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { error: "Unable to start this meeting." };
+  const { data, error } = await supabase.rpc("start_scheduled_meeting", { requested_public_code: meetingCode });
+  if (error || data !== true) return { error: "This meeting cannot be started yet." };
+  revalidatePath(`/m/${meetingCode}`);
+  revalidatePath("/dashboard");
+  redirect(`/m/${meetingCode}`);
+}
 
 export async function joinMeeting(_: GuestJoinActionState, formData: FormData): Promise<GuestJoinActionState> {
   const meetingCode = String(formData.get("meetingCode") ?? "").trim();
@@ -14,10 +30,13 @@ export async function joinMeeting(_: GuestJoinActionState, formData: FormData): 
   if (displayName.length > 80) return { error: "Your name must be 80 characters or fewer." };
   const joinIntent = formData.get("joinIntent") === "new_participant" ? "new_participant" : "resume";
   const suppliedSelector = formData.get("participantSelector");
-  const selector = validateParticipantSelector(suppliedSelector) ? suppliedSelector : null;
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: "Unable to join the meeting. Please try again." };
+
+  const { data: meetingData, error: meetingError } = await supabase.rpc("get_public_meeting_by_code", { meeting_code: meetingCode }).maybeSingle();
+  const meetingStatus = meetingData && typeof meetingData === "object" ? (meetingData as { status?: unknown }).status : null;
+  if (meetingError || meetingStatus !== "active") return { error: "This meeting is not available to join." };
 
   const existing = joinIntent === "resume" ? await resolveParticipantCredentials(
     meetingCode,

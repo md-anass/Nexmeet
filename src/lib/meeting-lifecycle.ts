@@ -1,7 +1,9 @@
 export type MeetingLifecycle = {
-  status: "active" | "ended";
+  status: "active" | "scheduled" | "ended" | "cancelled";
   startedAt: string | null;
   endedAt: string | null;
+  scheduledFor: string | null;
+  cancelledAt: string | null;
 };
 
 export type PublicMeeting = MeetingLifecycle & {
@@ -23,8 +25,16 @@ function firstRow(value: unknown): Record<string, unknown> | null {
 
 export function normalizeMeetingLifecycle(value: unknown): MeetingLifecycle | null {
   const row = firstRow(value);
-  if (!row || (row.status !== "active" && row.status !== "ended")) return null;
-  return { status: row.status, startedAt: validTimestamp(row.started_at), endedAt: validTimestamp(row.ended_at) };
+  if (!row) return null;
+  const status = typeof row.status === "string" ? row.status : null;
+  if (status !== "active" && status !== "scheduled" && status !== "ended" && status !== "cancelled") return null;
+  return {
+    status,
+    startedAt: validTimestamp(row.started_at),
+    endedAt: validTimestamp(row.ended_at),
+    scheduledFor: validTimestamp(row.scheduled_for),
+    cancelledAt: validTimestamp(row.cancelled_at),
+  };
 }
 
 export function normalizePublicMeeting(value: unknown): PublicMeeting | null {

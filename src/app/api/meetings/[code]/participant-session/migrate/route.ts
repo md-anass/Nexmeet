@@ -13,6 +13,10 @@ export async function GET(request: Request, { params }: RouteContext) {
   const credentials = await resolveParticipantCredentials(code);
   const supabase = await createSupabaseServerClient();
   if (!credentials || !supabase) return NextResponse.redirect(destination);
+  const { data: meeting, error: meetingError } = await supabase.rpc("get_public_meeting_by_code", { meeting_code: code }).maybeSingle();
+  if (meetingError || !meeting || typeof meeting !== "object" || (meeting as { status?: unknown }).status !== "active") {
+    return NextResponse.redirect(destination);
+  }
 
   const { data, error } = await supabase.rpc("resume_participant_session", {
     requested_meeting_code: code,

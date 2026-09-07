@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getParticipantAuth, isUuid, isValidMeetingCode, firstRpcRow, safeTimestamp, stringValue } from "@/lib/waiting-room";
+import { getParticipantAuth, hasActiveMeetingContext, isUuid, isValidMeetingCode, firstRpcRow, safeTimestamp, stringValue } from "@/lib/waiting-room";
 
 type RouteContext = { params: Promise<{ code: string }> };
 
@@ -8,6 +8,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!isValidMeetingCode(code)) return NextResponse.json({ error: "Meeting not found." }, { status: 404 });
   const auth = await getParticipantAuth(code, request);
   if (!auth) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
+  if (!await hasActiveMeetingContext(auth, code)) return NextResponse.json({ error: "This meeting is not available." }, { status: 409 });
 
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid request." }, { status: 400 }); }
