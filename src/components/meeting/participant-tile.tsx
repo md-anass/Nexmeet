@@ -9,7 +9,7 @@ type ParticipantTileProps = { participant: Participant; track?: TrackReference; 
 export function ParticipantTile({ participant, track, displayName, isLocal = false, cameraEnabled, microphoneEnabled = true, isHost = false, handRaised = false, reaction, className = "" }: ParticipantTileProps) {
   const name = isLocal ? displayName : participant.name || "Participant";
   const initials = name.trim().slice(0, 1).toUpperCase() || "N";
-  const showVideo = Boolean(track && cameraEnabled);
+  const showVideo = Boolean(track?.publication?.isSubscribed && track?.publication?.isEnabled && !track?.publication?.isMuted && cameraEnabled);
 
   return <div className={`relative aspect-video min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0b1224] shadow-2xl shadow-black/20 ${className}`}>
     {showVideo ? <VideoTrack trackRef={track} className={`size-full object-cover ${isLocal ? "mirror" : ""}`} /> : <div className="flex size-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_center,rgba(38,84,153,0.28),transparent_56%)] px-4 text-center text-white"><div className="flex size-20 items-center justify-center rounded-full border border-cyan-300/30 bg-gradient-to-br from-cyan-400/25 to-violet-500/25 text-2xl font-semibold">{initials}</div><p className="text-xs text-slate-400">Camera off</p></div>}

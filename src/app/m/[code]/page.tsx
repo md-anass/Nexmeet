@@ -78,7 +78,7 @@ export default async function MeetingLobbyPage({ params }: PageProps) {
                   )}
                 </>
               ) : (
-                <GuestJoinForm meetingCode={meeting.publicCode} approvalRequired={accessMode === "approval_required" && !isHost} />
+                <GuestJoinForm meetingCode={meeting.publicCode} approvalRequired={accessMode === "approval_required" && !isHost} creatorNewMeeting={isHost && !startedAt} />
               )}
               <p className="mt-3 text-center text-xs text-slate-500">Meeting code: <span className="font-semibold tracking-wide text-slate-700">{meeting.publicCode}</span></p>
               <CopyLinkButton link={shareLink} />

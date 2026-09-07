@@ -20,10 +20,11 @@ type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; disp
 type TokenResponse = { token: string; serverUrl: string };
 type MeetingEndedStatus = { status: "ended"; startedAt: string | null; endedAt: string | null };
 
-export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, startedAt, accessMode = "everyone", autoReconnect = false, autoJoin = false, shareLink = "" }: ParticipantMeetingProps) {
+export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, startedAt, accessMode = "everyone", autoReconnect = false, autoJoin = false, isHost = false, shareLink = "" }: ParticipantMeetingProps) {
   const prejoinRef = useRef<PrejoinMediaHandle>(null);
   const [tokenResponse, setTokenResponse] = useState<TokenResponse | null>(null);
   const [mediaChoices, setMediaChoices] = useState({ cameraEnabled: true, microphoneEnabled: true });
+  const [authoritativeStartedAt, setAuthoritativeStartedAt] = useState(startedAt);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [left, setLeft] = useState(false);
@@ -61,7 +62,7 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, sta
     return <div className="mt-8 rounded-2xl bg-slate-50 p-8 text-center"><p className="font-semibold text-slate-950">You left the meeting.</p><button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Return to lobby</button></div>;
   }
 
-  if (endedStatus) return <MeetingEndedScreen meetingTitle={meetingTitle} startedAt={endedStatus.startedAt ?? startedAt} endedAt={endedStatus.endedAt} />;
+  if (endedStatus) return <MeetingEndedScreen meetingTitle={meetingTitle} startedAt={endedStatus.startedAt ?? authoritativeStartedAt} endedAt={endedStatus.endedAt} />;
 
   if (!tokenResponse) {
     if ((autoReconnect || autoJoin) && !joinError) return <NexMeetMeetingLoader label={autoReconnect ? "Reconnecting to your meeting..." : "Joining your meeting..."} />;
@@ -69,12 +70,12 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, sta
       <div className="min-h-[100dvh] bg-[#020817] px-5 py-8 text-white sm:px-10"><NexMeetBrand className="mx-auto max-w-lg" /><div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 sm:p-10"><p className="text-sm font-medium text-cyan-300">Meeting lobby</p><p className="mt-2 text-2xl font-semibold">{meetingTitle}</p><p className="mt-1 text-sm text-slate-400">{displayName} · Ready to join</p>
       <PrejoinMediaPreview ref={prejoinRef} displayName={displayName} />
       {joinError && <p role="alert" className="mt-4 rounded-xl bg-red-400/10 px-4 py-3 text-sm text-red-200">{joinError}</p>}
-      <button type="button" onClick={() => void startMeeting()} disabled={joining} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-400 to-blue-600 px-5 py-3 text-sm font-semibold text-slate-950 hover:from-cyan-300 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{joining ? "Starting meeting..." : autoReconnect ? "Retry connection" : "Join meeting"}</button></div></div>
+      <button type="button" onClick={() => void startMeeting()} disabled={joining} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-400 to-blue-600 px-5 py-3 text-sm font-semibold text-slate-950 hover:from-cyan-300 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{joining ? (startedAt ? "Joining meeting..." : "Starting meeting...") : autoReconnect ? "Retry connection" : !startedAt && isHost ? "Start Meeting" : "Join Meeting"}</button></div></div>
     </>;
   }
 
-  return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void markParticipantStatus(meetingCode, "joined"); }} onError={() => { setJoinError("We could not connect you to the meeting."); }}>
-    <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} startedAt={startedAt} accessMode={accessMode} shareLink={shareLink} onLeft={() => setLeft(true)} onEnded={(status) => setEndedStatus(status)} />
+  return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void (async () => { await markParticipantStatus(meetingCode, "joined"); try { const response = await fetch(`/api/meetings/${meetingCode}/meeting-status`, { cache: "no-store" }); if (!response.ok) return; const result = await response.json() as { startedAt?: unknown }; if (typeof result.startedAt === "string") setAuthoritativeStartedAt(result.startedAt); } catch { /* Keep the existing lifecycle value during a transient status failure. */ } })(); }} onError={() => { setJoinError("We could not connect you to the meeting."); }}>
+    <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} startedAt={authoritativeStartedAt} accessMode={accessMode} shareLink={shareLink} onLeft={() => setLeft(true)} onEnded={(status) => setEndedStatus(status)} />
   </LiveKitRoom>;
 }
 
