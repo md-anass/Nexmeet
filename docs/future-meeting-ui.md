@@ -15,4 +15,12 @@ Design a polished request panel matching the navy, cyan, and purple brand:
 
 Retain premium raised-hand indicator redesign as a future visual task.
 
+## Password protection
+
+- Premium password-protected meeting indicator.
+- Polished password entry screen with show/hide control.
+- Accessible focus and error states.
+- Mobile-responsive password gate.
+- NexMeet security iconography.
+
 These are design goals only; no new functionality is implemented here.

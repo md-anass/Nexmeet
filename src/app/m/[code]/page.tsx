@@ -6,6 +6,7 @@ import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { GuestJoinForm } from "@/components/shared/guest-join-form";
 import { ParticipantMeeting } from "@/components/meeting/participant-meeting";
 import { WaitingRoomGate } from "@/components/meeting/waiting-room-gate";
+import { MeetingPasswordGate } from "@/components/shared/meeting-password-gate";
 import { formatMeetingDuration, normalizePublicMeeting } from "@/lib/meeting-lifecycle";
 import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server";
@@ -51,6 +52,10 @@ export default async function MeetingLobbyPage({ params }: PageProps) {
   const shareLink = host ? `${protocol}://${host}/m/${meeting.publicCode}` : `/m/${meeting.publicCode}`;
 
   if (meeting.status === "active" && participantSession) {
+    const passwordVerified = participantSession.password_verified_at != null;
+    if (meeting.requiresPassword && !isHost && !passwordVerified) {
+      return <main className="min-h-screen px-6 py-8"><div className="mx-auto max-w-xl"><MeetingPasswordGate meetingCode={meeting.publicCode} /></div></main>;
+    }
     if (accessMode === "approval_required" && !isHost && participantSession.status !== "joined") {
       return <WaitingRoomGate meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} shareLink={shareLink} />;
     }
@@ -78,7 +83,7 @@ export default async function MeetingLobbyPage({ params }: PageProps) {
                   )}
                 </>
               ) : (
-                <GuestJoinForm meetingCode={meeting.publicCode} approvalRequired={accessMode === "approval_required" && !isHost} creatorNewMeeting={isHost && !startedAt} />
+                <GuestJoinForm meetingCode={meeting.publicCode} approvalRequired={accessMode === "approval_required" && !isHost} creatorNewMeeting={isHost && !startedAt} requiresPassword={meeting.requiresPassword && !isHost} />
               )}
               <p className="mt-3 text-center text-xs text-slate-500">Meeting code: <span className="font-semibold tracking-wide text-slate-700">{meeting.publicCode}</span></p>
               <CopyLinkButton link={shareLink} />

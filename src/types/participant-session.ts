@@ -6,6 +6,7 @@ export type ParticipantSession = {
   status: string;
   joined_at: string;
   left_at: string | null;
+  password_verified_at: string | null;
 };
 
 export type GuestJoinActionState = {

@@ -27,6 +27,14 @@ export function CreateMeetingForm() {
           </label>
         </div>
       </fieldset>
+      <fieldset className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+        <label className="flex items-center gap-3 text-sm font-medium text-slate-700"><input name="require_password" type="checkbox" className="accent-slate-950" />Require password</label>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm text-slate-700">Meeting password<input name="password" type="password" minLength={4} maxLength={128} autoComplete="new-password" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950" /></label>
+          <label className="text-sm text-slate-700">Confirm password<input name="confirm_password" type="password" minLength={4} maxLength={128} autoComplete="new-password" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950" /></label>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Use 4–128 characters. Passwords are case-sensitive.</p>
+      </fieldset>
       {state.error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>}
       <button type="submit" disabled={pending} className="mt-4 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">{pending ? "Creating..." : "Create meeting"}</button>
     </form>

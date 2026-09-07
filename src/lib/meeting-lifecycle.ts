@@ -9,6 +9,7 @@ export type PublicMeeting = MeetingLifecycle & {
   publicCode: string;
   hostDisplayName: string | null;
   accessMode: "everyone" | "approval_required";
+  requiresPassword: boolean;
 };
 
 function validTimestamp(value: unknown) {
@@ -36,6 +37,7 @@ export function normalizePublicMeeting(value: unknown): PublicMeeting | null {
     publicCode: row.public_code,
     hostDisplayName: typeof row.host_display_name === "string" ? row.host_display_name : null,
     accessMode: row.access_mode === "approval_required" ? "approval_required" : "everyone",
+    requiresPassword: row.requires_password === true,
   };
 }
 

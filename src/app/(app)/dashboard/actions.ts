@@ -1,18 +1,11 @@
 "use server";
 
-import { randomBytes, randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type MeetingActionState = { error: string };
 
-const CODE_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const ALLOWED_ACCESS_MODES = ["everyone", "approval_required"] as const;
-
-function createPublicCode() {
-  const bytes = randomBytes(12);
-  return Array.from(bytes, (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
-}
 
 export async function createMeeting(_: MeetingActionState, formData: FormData): Promise<MeetingActionState> {
   const title = String(formData.get("title") ?? "").trim();
@@ -21,30 +14,22 @@ export async function createMeeting(_: MeetingActionState, formData: FormData): 
   const accessMode = ALLOWED_ACCESS_MODES.includes(requestedAccessMode as (typeof ALLOWED_ACCESS_MODES)[number])
     ? requestedAccessMode as (typeof ALLOWED_ACCESS_MODES)[number]
     : "everyone";
+  const requirePassword = formData.get("require_password") === "on";
+  const password = requirePassword ? String(formData.get("password") ?? "") : null;
+  const confirmPassword = requirePassword ? String(formData.get("confirm_password") ?? "") : null;
+  if (requirePassword && (!password || !confirmPassword || password.length < 4 || password.length > 128 || password !== confirmPassword)) {
+    return { error: "Enter matching meeting passwords between 4 and 128 characters." };
+  }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: "Meetings are not configured yet." };
 
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) return { error: "Your session has expired. Please sign in again." };
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data, error } = await supabase
-      .from("meetings")
-      .insert({
-        host_user_id: userData.user.id,
-        public_code: createPublicCode(),
-        room_name: `nm_${randomUUID()}`,
-        title,
-        status: "active",
-        access_mode: accessMode,
-      })
-      .select("public_code")
-      .single();
-
-    if (!error && data) redirect(`/m/${data.public_code}`);
-    if (error?.code !== "23505") return { error: "We could not create your meeting. Please try again." };
-  }
-
-  return { error: "We could not create a unique meeting link. Please try again." };
+  const { data, error } = await supabase.rpc("create_meeting", {
+    requested_title: title,
+    requested_access_mode: accessMode,
+    requested_password: password,
+  }).maybeSingle();
+  const publicCode = data && typeof (data as { public_code?: unknown }).public_code === "string" ? (data as { public_code: string }).public_code : null;
+  if (!error && publicCode) redirect(`/m/${publicCode}`);
+  return { error: "We could not create your meeting. Please try again." };
 }
