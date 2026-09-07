@@ -58,7 +58,7 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
         if (process.env.NODE_ENV === "development") console.warn("Local media initialization failed", errorName);
         if (errorName === "NotAllowedError" || errorName === "SecurityError") {
           setMediaState("denied");
-          setMessage("Camera and microphone access was blocked.");
+          setMessage("Camera and microphone access is blocked in your browser settings.");
         } else if (errorName === "NotFoundError") {
           setMediaState("unavailable");
           setMessage("No camera or microphone was found.");
@@ -88,13 +88,16 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
   }, [stream, cameraEnabled]);
 
   useImperativeHandle(ref, () => ({
-    getState: () => ({ cameraEnabled, microphoneEnabled }),
+    getState: () => ({
+      cameraEnabled: mediaState === "ready" && stream !== null && cameraEnabled,
+      microphoneEnabled: mediaState === "ready" && stream !== null && microphoneEnabled,
+    }),
     stop: () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       setStream(null);
     },
-  }), [cameraEnabled, microphoneEnabled]);
+  }), [cameraEnabled, mediaState, microphoneEnabled, stream]);
 
   function toggleMicrophone() {
     const nextEnabled = !microphoneEnabled;

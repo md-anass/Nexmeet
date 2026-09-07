@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export type MeetingActionState = { error: string };
 
 const CODE_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+const ALLOWED_ACCESS_MODES = ["everyone", "approval_required"] as const;
 
 function createPublicCode() {
   const bytes = randomBytes(12);
@@ -16,6 +17,10 @@ function createPublicCode() {
 export async function createMeeting(_: MeetingActionState, formData: FormData): Promise<MeetingActionState> {
   const title = String(formData.get("title") ?? "").trim();
   if (!title || title.length > 120) return { error: "Enter a meeting title using 120 characters or fewer." };
+  const requestedAccessMode = String(formData.get("access_mode") ?? "");
+  const accessMode = ALLOWED_ACCESS_MODES.includes(requestedAccessMode as (typeof ALLOWED_ACCESS_MODES)[number])
+    ? requestedAccessMode as (typeof ALLOWED_ACCESS_MODES)[number]
+    : "everyone";
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: "Meetings are not configured yet." };
@@ -32,6 +37,7 @@ export async function createMeeting(_: MeetingActionState, formData: FormData): 
         room_name: `nm_${randomUUID()}`,
         title,
         status: "active",
+        access_mode: accessMode,
       })
       .select("public_code")
       .single();
