@@ -6,6 +6,12 @@ type RouteContext = { params: Promise<{ code: string }> };
 function currentHostKey(value: unknown) {
   if (typeof value === "string") return value;
   if (Array.isArray(value) && value.length === 1 && typeof value[0] === "string") return value[0];
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    for (const key of ["current_host_participant_key", "participant_key", "currentHostParticipantKey"]) {
+      if (typeof row[key] === "string") return row[key];
+    }
+  }
   return null;
 }
 

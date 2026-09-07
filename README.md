@@ -32,6 +32,13 @@ Set these values in `.env.local`:
 ```text
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+```
+
+The service-role key is used only by the verified LiveKit lifecycle webhook and must never use a `NEXT_PUBLIC_` prefix. Configure LiveKit to send webhooks to:
+
+```text
+https://<deployment-domain>/api/livekit/webhook
 ```
 
 In Supabase Authentication URL Configuration, set the Site URL to your app URL, such as `http://localhost:3000` for local development. Add `http://localhost:3000/auth/confirm` as a redirect URL while developing.

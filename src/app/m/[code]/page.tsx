@@ -1,22 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { GuestJoinForm } from "@/components/shared/guest-join-form";
 import { ParticipantMeeting } from "@/components/meeting/participant-meeting";
 import { WaitingRoomGate } from "@/components/meeting/waiting-room-gate";
 import { MeetingPasswordGate } from "@/components/shared/meeting-password-gate";
 import { formatMeetingDuration, normalizePublicMeeting } from "@/lib/meeting-lifecycle";
-import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
+import { hashSessionSecret, validateParticipantSelector } from "@/lib/participant-session";
+import { resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import type { ParticipantSession } from "@/types/participant-session";
+import { JoinAsAnotherParticipantForm } from "@/components/shared/join-as-another-participant-form";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = { params: Promise<{ code: string }> };
-export default async function MeetingLobbyPage({ params }: PageProps) {
+type PageProps = { params: Promise<{ code: string }>; searchParams: Promise<{ participant?: string }> };
+export default async function MeetingLobbyPage({ params, searchParams }: PageProps) {
   const { code } = await params;
+  const { participant: suppliedSelector } = await searchParams;
+  const participantSelector = validateParticipantSelector(suppliedSelector) ? suppliedSelector : null;
   if (!/^[a-z0-9]{10,16}$/.test(code)) notFound();
 
   const supabase = await createSupabaseServerClient();
@@ -37,14 +41,17 @@ export default async function MeetingLobbyPage({ params }: PageProps) {
   const startedAt = meeting.startedAt ?? ownedMeeting?.started_at ?? null;
   const hostName = meeting.hostDisplayName?.trim() || "Host";
   let participantSession: ParticipantSession | null = null;
-  const cookieValue = (await cookies()).get(PARTICIPANT_SESSION_COOKIE)?.value;
-  const participantCookie = decodeParticipantCookie(cookieValue, code);
+  const participantCookie = await resolveParticipantCredentials(code, suppliedSelector === undefined ? undefined : suppliedSelector);
   if (participantCookie) {
-    const { data: session, error: sessionError } = await supabase.rpc("get_participant_session", {
+    const { data: session, error: sessionError } = await supabase.rpc("resume_participant_session", {
+      requested_meeting_code: code,
       requested_participant_key: participantCookie.participantKey,
       requested_session_token_hash: hashSessionSecret(participantCookie.rawSecret),
     }).maybeSingle();
     if (!sessionError && session && (session as ParticipantSession).status !== "left") participantSession = session as ParticipantSession;
+  }
+  if (participantSession && participantCookie?.source === "legacy") {
+    redirect(`/api/meetings/${code}/participant-session/migrate`);
   }
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
@@ -54,12 +61,12 @@ export default async function MeetingLobbyPage({ params }: PageProps) {
   if (meeting.status === "active" && participantSession) {
     const passwordVerified = participantSession.password_verified_at != null;
     if (meeting.requiresPassword && !isHost && !passwordVerified) {
-      return <main className="min-h-screen px-6 py-8"><div className="mx-auto max-w-xl"><MeetingPasswordGate meetingCode={meeting.publicCode} /></div></main>;
+      return <main className="min-h-screen px-6 py-8"><div className="mx-auto max-w-xl"><MeetingPasswordGate meetingCode={meeting.publicCode} participantSelector={participantSelector!} /></div></main>;
     }
     if (accessMode === "approval_required" && !isHost && participantSession.status !== "joined") {
-      return <WaitingRoomGate meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} shareLink={shareLink} />;
+      return <WaitingRoomGate meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} shareLink={shareLink} participantSelector={participantSelector!} />;
     }
-    return <ParticipantMeeting meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} accessMode={accessMode} autoReconnect={participantSession.status === "joined"} isHost={isHost} shareLink={shareLink} />;
+    return <ParticipantMeeting meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} accessMode={accessMode} autoReconnect={participantSession.status === "joined"} isHost={isHost} shareLink={shareLink} participantSelector={participantSelector!} />;
   }
 
   return (
@@ -77,10 +84,11 @@ export default async function MeetingLobbyPage({ params }: PageProps) {
                 <>
                   <p className="mt-8 text-lg font-semibold text-slate-950">{participantSession.display_name}</p>
                   {accessMode === "approval_required" && !isHost ? (
-                    <WaitingRoomGate meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} shareLink={shareLink} />
+                    <WaitingRoomGate meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} shareLink={shareLink} participantSelector={participantSelector!} />
                   ) : (
-                    <><p className="mt-1 text-sm text-emerald-700">Ready to join</p><ParticipantMeeting meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} accessMode={accessMode} autoReconnect={participantSession.status === "joined"} isHost={isHost} shareLink={shareLink} /></>
+                    <><p className="mt-1 text-sm text-emerald-700">Ready to join</p><ParticipantMeeting meetingCode={meeting.publicCode} meetingTitle={meeting.title} displayName={participantSession.display_name} startedAt={startedAt} accessMode={accessMode} autoReconnect={participantSession.status === "joined"} isHost={isHost} shareLink={shareLink} participantSelector={participantSelector!} /></>
                   )}
+                  <JoinAsAnotherParticipantForm meetingCode={meeting.publicCode} displayName={participantSession.display_name} participantSelector={participantSelector!} />
                 </>
               ) : (
                 <GuestJoinForm meetingCode={meeting.publicCode} approvalRequired={accessMode === "approval_required" && !isHost} creatorNewMeeting={isHost && !startedAt} requiresPassword={meeting.requiresPassword && !isHost} />

@@ -9,7 +9,7 @@ import { formatMeetingDuration } from "@/lib/meeting-lifecycle";
 type WaitingState = "loading" | "waiting" | "admitted" | "rejected" | "ended" | "error";
 type LifecycleResponse = { status?: unknown; startedAt?: unknown; endedAt?: unknown };
 
-export function WaitingRoomGate({ meetingCode, meetingTitle, displayName, startedAt, shareLink }: { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; shareLink: string }) {
+export function WaitingRoomGate({ meetingCode, meetingTitle, displayName, startedAt, shareLink, participantSelector }: { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; shareLink: string; participantSelector: string }) {
   const router = useRouter();
   const [state, setState] = useState<WaitingState>("loading");
   const [lifecycle, setLifecycle] = useState({ startedAt, endedAt: null as string | null });
@@ -54,14 +54,14 @@ export function WaitingRoomGate({ meetingCode, meetingTitle, displayName, starte
       if (statusInFlight || disposed) return;
       statusInFlight = true;
       try {
-        const response = await fetch(`/api/meetings/${meetingCode}/waiting-room/status`, { cache: "no-store" });
+        const response = await fetch(`/api/meetings/${meetingCode}/waiting-room/status`, { cache: "no-store", headers: { "x-nexmeet-participant-selector": participantSelector } });
         if (disposed) return;
         if (response.ok) {
           const result = (await response.json()) as { status?: unknown };
           if (disposed) return;
           if (result.status === "not_requested" && !requestAttempted) {
             requestAttempted = true;
-            const requestResponse = await fetch(`/api/meetings/${meetingCode}/waiting-room/request`, { method: "POST" });
+            const requestResponse = await fetch(`/api/meetings/${meetingCode}/waiting-room/request`, { method: "POST", headers: { "x-nexmeet-participant-selector": participantSelector } });
             if (disposed) return;
             if (requestResponse.ok) {
               const requested = (await requestResponse.json()) as { status?: unknown };
@@ -96,7 +96,7 @@ export function WaitingRoomGate({ meetingCode, meetingTitle, displayName, starte
   }, [meetingCode]);
 
   if (state === "admitted") {
-    return <ParticipantMeeting meetingCode={meetingCode} meetingTitle={meetingTitle} displayName={displayName} startedAt={lifecycle.startedAt} accessMode="approval_required" autoJoin shareLink={shareLink} />;
+    return <ParticipantMeeting meetingCode={meetingCode} meetingTitle={meetingTitle} displayName={displayName} startedAt={lifecycle.startedAt} participantSelector={participantSelector} accessMode="approval_required" autoJoin shareLink={shareLink} />;
   }
 
   return <main className="flex min-h-[100dvh] items-center justify-center bg-[#020817] px-5 py-10 text-white"><div className="w-full max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl sm:p-10"><NexMeetBrand className="justify-center" /><p className="mt-8 text-sm font-medium text-cyan-300">{meetingTitle}</p>{state === "ended" ? <><h1 className="mt-2 text-3xl font-semibold">Meeting ended</h1><p className="mt-5 text-sm text-slate-400">Total duration</p><p className="mt-1 text-3xl font-semibold tabular-nums">{formatMeetingDuration(lifecycle.startedAt, lifecycle.endedAt) ?? "Calculating duration..."}</p></> : state === "rejected" ? <><h1 className="mt-2 text-3xl font-semibold">Request declined</h1><p className="mt-4 text-sm text-slate-400">Your request to join was declined.</p></> : state === "error" ? <><h1 className="mt-2 text-3xl font-semibold">Unable to join</h1><p className="mt-4 text-sm text-slate-400">Your meeting request could not be loaded. Please try again.</p></> : <><h1 className="mt-2 text-3xl font-semibold">Waiting for the host</h1><p className="mt-4 text-sm text-slate-400">Waiting for the host to let you in.</p><p className="mt-2 text-sm text-slate-500">{displayName}</p></>}<button type="button" onClick={() => router.push("/")} className="mt-8 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-200">{state === "waiting" || state === "loading" ? "Leave" : "Back"}</button></div></main>;

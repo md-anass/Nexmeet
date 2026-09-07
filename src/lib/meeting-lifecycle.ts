@@ -53,3 +53,16 @@ export function formatMeetingDuration(startedAt: string | null, endedAt: string 
     ? [hours, minutes, remainder].map((value) => String(value).padStart(2, "0")).join(":")
     : [minutes, remainder].map((value) => String(value).padStart(2, "0")).join(":");
 }
+
+export function formatDashboardDuration(startedAt: string | null, endedAt: string | null) {
+  if (!startedAt || !endedAt) return "—";
+  const seconds = Math.max(0, Math.floor((Date.parse(endedAt) - Date.parse(startedAt)) / 1000));
+  const hours = Math.floor(seconds / 3600); const minutes = Math.floor((seconds % 3600) / 60);
+  return hours ? `${hours} hr${hours === 1 ? "" : "s"}${minutes ? ` ${minutes} min` : ""}` : `${minutes} min`;
+}
+
+export function formatDashboardDateTime(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "—";
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(timestamp);
+}

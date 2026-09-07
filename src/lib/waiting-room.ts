@@ -1,5 +1,5 @@
-import { cookies } from "next/headers";
-import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
+import { hashSessionSecret } from "@/lib/participant-session";
+import { participantSelectorFromRequest, resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ParticipantAuth = {
@@ -12,10 +12,10 @@ export function isValidMeetingCode(code: string) {
   return /^[a-z0-9]{10,16}$/.test(code);
 }
 
-export async function getParticipantAuth(code: string): Promise<ParticipantAuth | null> {
+export async function getParticipantAuth(code: string, request: Request): Promise<ParticipantAuth | null> {
   const supabase = await createSupabaseServerClient();
-  const cookieValue = (await cookies()).get(PARTICIPANT_SESSION_COOKIE)?.value;
-  const credentials = decodeParticipantCookie(cookieValue, code);
+  const selector = participantSelectorFromRequest(request);
+  const credentials = selector ? await resolveParticipantCredentials(code, selector, true) : null;
   if (!supabase || !credentials) return null;
   return { supabase, participantKey: credentials.participantKey, tokenHash: hashSessionSecret(credentials.rawSecret) };
 }

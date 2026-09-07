@@ -1,6 +1,7 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
+import { cookies } from "next/headers";
+import { getParticipantCookieName, hashSessionSecret } from "@/lib/participant-session";
+import { expireParticipantCredentials, participantSelectorFromRequest, resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ code: string }> };
@@ -22,7 +23,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const credentials = decodeParticipantCookie((await cookies()).get(PARTICIPANT_SESSION_COOKIE)?.value, code);
+  const selector = participantSelectorFromRequest(request);
+  const credentials = selector ? await resolveParticipantCredentials(code, selector, true) : null;
   const supabase = await createSupabaseServerClient();
   if (!credentials || !supabase) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
 
@@ -32,7 +34,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     requested_session_token_hash: tokenHash,
   }).maybeSingle();
   const session = sessionData as ParticipantSessionRow | null;
-  if (sessionError || !session) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
+  if (sessionError || !session) {
+    if (selector) await expireParticipantCredentials(selector);
+    return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
+  }
 
   const { data: contextData, error: contextError } = await supabase.rpc("get_participant_meeting_context", {
     requested_participant_key: credentials.participantKey,
@@ -55,5 +60,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       requested_status: requestedStatus,
     });
   if (error) return NextResponse.json({ error: "Unable to update meeting status." }, { status: 500 });
+  if (requestedStatus === "left" && selector) {
+    (await cookies()).delete(getParticipantCookieName(selector));
+  }
   return NextResponse.json({ ok: true });
 }

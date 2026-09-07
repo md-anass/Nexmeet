@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { AccessToken } from "livekit-server-sdk";
-import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
+import { AccessToken, RoomConfiguration } from "livekit-server-sdk";
+import { hashSessionSecret } from "@/lib/participant-session";
+import { expireParticipantCredentials, participantSelectorFromRequest, resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { booleanValue, firstRpcRow, stringValue } from "@/lib/waiting-room";
 
@@ -15,7 +15,6 @@ function failure(status: number, message: string) {
 
 
 export async function POST(request: Request, { params }: RouteContext) {
-  void request;
   const { code } = await params;
   if (!/^[a-z0-9]{10,16}$/.test(code)) return failure(404, "Meeting not found.");
 
@@ -26,8 +25,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   };
   if (!config.url || !config.apiKey || !config.apiSecret) return failure(503, "Video service is not configured.");
 
-  const cookie = (await cookies()).get(PARTICIPANT_SESSION_COOKIE)?.value;
-  const credentials = decodeParticipantCookie(cookie, code);
+  const selector = participantSelectorFromRequest(request);
+  const credentials = selector ? await resolveParticipantCredentials(code, selector, true) : null;
   if (!credentials) return failure(401, "Your meeting session is invalid or expired.");
 
   const supabase = await createSupabaseServerClient();
@@ -39,7 +38,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     requested_session_token_hash: tokenHash,
   }).maybeSingle();
   const session = sessionData as ParticipantSessionRow | null;
-  if (sessionError || !session || session.status === "left") return failure(401, "Your meeting session is invalid or expired.");
+  if (sessionError || !session || session.status === "left") {
+    if (selector) await expireParticipantCredentials(selector);
+    return failure(401, "Your meeting session is invalid or expired.");
+  }
 
   const { data: contextData, error: contextError } = await supabase.rpc("get_participant_meeting_context", {
     requested_participant_key: credentials.participantKey,
@@ -48,6 +50,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   }).maybeSingle();
   const context = contextData as MeetingContextRow | null;
   if (contextError || !context || context.status !== "active" || context.meeting_id !== session.meeting_id) {
+    if (selector) await expireParticipantCredentials(selector);
     return failure(404, "This meeting is no longer available.");
   }
 
@@ -95,6 +98,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     name: session.display_name,
     ttl: "10m",
   });
+  accessToken.roomConfig = new RoomConfiguration({ departureTimeout: 120 });
   accessToken.addGrant({ roomJoin: true, room: context.room_name, canPublish: true, canSubscribe: true, canUpdateOwnMetadata: true });
 
   try {

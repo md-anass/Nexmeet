@@ -1,18 +1,19 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { normalizeMeetingLifecycle, normalizePublicMeeting } from "@/lib/meeting-lifecycle";
-import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
+import { hashSessionSecret } from "@/lib/participant-session";
+import { participantSelectorFromRequest, resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ code: string }> };
 type ParticipantSessionRow = { meeting_id: string; status: string };
 type MeetingContextRow = { meeting_id: string; status: string };
 
-export async function POST(_: Request, { params }: RouteContext) {
+export async function POST(request: Request, { params }: RouteContext) {
   const { code } = await params;
   if (!/^[a-z0-9]{10,16}$/.test(code)) return NextResponse.json({ error: "Meeting not found." }, { status: 404 });
 
-  const credentials = decodeParticipantCookie((await cookies()).get(PARTICIPANT_SESSION_COOKIE)?.value, code);
+  const selector = participantSelectorFromRequest(request);
+  const credentials = selector ? await resolveParticipantCredentials(code, selector, true) : null;
   const supabase = await createSupabaseServerClient();
   if (!credentials || !supabase) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
 

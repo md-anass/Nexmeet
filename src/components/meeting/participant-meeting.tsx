@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext, useTracks } from "@livekit/components-react";
-import { Room, RoomEvent, Track, type LocalParticipant, type Participant, type RoomEventCallbacks } from "livekit-client";
+import { ConnectionState, Room, RoomEvent, Track, type LocalParticipant, type Participant, type RoomEventCallbacks } from "livekit-client";
 import { NexMeetBrand } from "@/components/brand/nexmeet-brand";
 import { MeetingControls } from "@/components/meeting/meeting-controls";
 import { MeetingStage } from "@/components/meeting/meeting-stage";
@@ -14,16 +14,17 @@ import { NexMeetMeetingLoader } from "@/components/meeting/nexmeet-meeting-loade
 import { PrejoinMediaPreview, type PrejoinMediaHandle } from "@/components/meeting/prejoin-media-preview";
 import { WaitingRoomHostPanel, type PendingWaitingRoomEntry } from "@/components/meeting/waiting-room-host-panel";
 import { formatMeetingDuration } from "@/lib/meeting-lifecycle";
+import { readMediaPreferences, writeMediaPreferences } from "@/lib/media-preferences";
 import { HAND_RAISED_ATTRIBUTE, isReactionType, REACTION_TOPIC, type ReactionType } from "@/components/meeting/meeting-ephemeral";
 
-type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; accessMode?: "everyone" | "approval_required"; autoReconnect?: boolean; autoJoin?: boolean; isHost?: boolean; shareLink?: string };
+type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; participantSelector: string; accessMode?: "everyone" | "approval_required"; autoReconnect?: boolean; autoJoin?: boolean; isHost?: boolean; shareLink?: string };
 type TokenResponse = { token: string; serverUrl: string };
 type MeetingEndedStatus = { status: "ended"; startedAt: string | null; endedAt: string | null };
 
-export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, startedAt, accessMode = "everyone", autoReconnect = false, autoJoin = false, isHost = false, shareLink = "" }: ParticipantMeetingProps) {
+export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, startedAt, participantSelector, accessMode = "everyone", autoReconnect = false, autoJoin = false, isHost = false, shareLink = "" }: ParticipantMeetingProps) {
   const prejoinRef = useRef<PrejoinMediaHandle>(null);
   const [tokenResponse, setTokenResponse] = useState<TokenResponse | null>(null);
-  const [mediaChoices, setMediaChoices] = useState({ cameraEnabled: true, microphoneEnabled: true });
+  const [mediaChoices, setMediaChoices] = useState(() => readMediaPreferences(meetingCode));
   const [authoritativeStartedAt, setAuthoritativeStartedAt] = useState(startedAt);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
@@ -42,7 +43,7 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, sta
     setJoining(true);
     setJoinError("");
     try {
-      const response = await fetch(`/api/meetings/${meetingCode}/livekit-token`, { method: "POST" });
+      const response = await fetch(`/api/meetings/${meetingCode}/livekit-token`, { method: "POST", headers: { "x-nexmeet-participant-selector": participantSelector } });
       if (!response.ok) {
         throw new Error("token_request_failed");
       }
@@ -68,26 +69,26 @@ export function ParticipantMeeting({ meetingCode, meetingTitle, displayName, sta
     if ((autoReconnect || autoJoin) && !joinError) return <NexMeetMeetingLoader label={autoReconnect ? "Reconnecting to your meeting..." : "Joining your meeting..."} />;
     return <>
       <div className="min-h-[100dvh] bg-[#020817] px-5 py-8 text-white sm:px-10"><NexMeetBrand className="mx-auto max-w-lg" /><div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 sm:p-10"><p className="text-sm font-medium text-cyan-300">Meeting lobby</p><p className="mt-2 text-2xl font-semibold">{meetingTitle}</p><p className="mt-1 text-sm text-slate-400">{displayName} · Ready to join</p>
-      <PrejoinMediaPreview ref={prejoinRef} displayName={displayName} />
+      <PrejoinMediaPreview ref={prejoinRef} displayName={displayName} meetingCode={meetingCode} />
       {joinError && <p role="alert" className="mt-4 rounded-xl bg-red-400/10 px-4 py-3 text-sm text-red-200">{joinError}</p>}
       <button type="button" onClick={() => void startMeeting()} disabled={joining} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-400 to-blue-600 px-5 py-3 text-sm font-semibold text-slate-950 hover:from-cyan-300 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{joining ? (startedAt ? "Joining meeting..." : "Starting meeting...") : autoReconnect ? "Retry connection" : !startedAt && isHost ? "Start Meeting" : "Join Meeting"}</button></div></div>
     </>;
   }
 
-  return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void (async () => { await markParticipantStatus(meetingCode, "joined"); try { const response = await fetch(`/api/meetings/${meetingCode}/meeting-status`, { cache: "no-store" }); if (!response.ok) return; const result = await response.json() as { startedAt?: unknown }; if (typeof result.startedAt === "string") setAuthoritativeStartedAt(result.startedAt); } catch { /* Keep the existing lifecycle value during a transient status failure. */ } })(); }} onError={() => { setJoinError("We could not connect you to the meeting."); }}>
-    <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} startedAt={authoritativeStartedAt} accessMode={accessMode} shareLink={shareLink} onLeft={() => setLeft(true)} onEnded={(status) => setEndedStatus(status)} />
+  return <LiveKitRoom token={tokenResponse.token} serverUrl={tokenResponse.serverUrl} connect audio={mediaChoices.microphoneEnabled} video={mediaChoices.cameraEnabled} onConnected={() => { void (async () => { await markParticipantStatus(meetingCode, participantSelector, "joined"); try { const response = await fetch(`/api/meetings/${meetingCode}/meeting-status`, { cache: "no-store" }); if (!response.ok) return; const result = await response.json() as { startedAt?: unknown }; if (typeof result.startedAt === "string") setAuthoritativeStartedAt(result.startedAt); } catch { /* Keep the existing lifecycle value during a transient status failure. */ } })(); }} onError={() => { setJoinError("We could not connect you to the meeting."); }}>
+    <LiveMeetingRoom meetingTitle={meetingTitle} displayName={displayName} meetingCode={meetingCode} participantSelector={participantSelector} startedAt={authoritativeStartedAt} accessMode={accessMode} shareLink={shareLink} onLeft={() => setLeft(true)} onEnded={(status) => setEndedStatus(status)} />
   </LiveKitRoom>;
 }
 
-async function markParticipantStatus(meetingCode: string, status: "joined" | "left") {
+async function markParticipantStatus(meetingCode: string, participantSelector: string, status: "joined" | "left") {
   await fetch(`/api/meetings/${meetingCode}/participant-status`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-nexmeet-participant-selector": participantSelector },
     body: JSON.stringify({ status }),
   });
 }
 
-function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, accessMode, shareLink, onLeft, onEnded }: { meetingTitle: string; displayName: string; meetingCode: string; startedAt: string | null; accessMode: "everyone" | "approval_required"; shareLink: string; onLeft: () => void; onEnded: (status: MeetingEndedStatus) => void }) {
+function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, participantSelector, startedAt, accessMode, shareLink, onLeft, onEnded }: { meetingTitle: string; displayName: string; meetingCode: string; participantSelector: string; startedAt: string | null; accessMode: "everyone" | "approval_required"; shareLink: string; onLeft: () => void; onEnded: (status: MeetingEndedStatus) => void }) {
   const room = useRoomContext();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant();
   const participants = useParticipants();
@@ -154,6 +155,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
   }, [room, showReaction]);
 
   async function sendReaction(reaction: ReactionType) {
+    if (room.state !== ConnectionState.Connected) return;
     if (Date.now() - lastReactionAt.current < 800) return;
     lastReactionAt.current = Date.now();
     showReaction(localParticipant.identity, reaction);
@@ -165,6 +167,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
   }
 
   async function toggleHand() {
+    if (room.state !== ConnectionState.Connected) return;
     const next = !handRaised;
     try {
       await localParticipant.setAttributes({ ...localParticipant.attributes, [HAND_RAISED_ATTRIBUTE]: String(next) });
@@ -208,7 +211,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
       if (accessMode !== "approval_required" || !isCurrentHost || pendingPollInFlight.current) return;
       pendingPollInFlight.current = true;
       try {
-        const response = await fetch(`/api/meetings/${meetingCode}/waiting-room/pending`, { cache: "no-store" });
+        const response = await fetch(`/api/meetings/${meetingCode}/waiting-room/pending`, { cache: "no-store", headers: { "x-nexmeet-participant-selector": participantSelector } });
         if (!response.ok || disposed) return;
         const result = (await response.json()) as { entries?: PendingWaitingRoomEntry[] };
         setPendingEntries(Array.isArray(result.entries) ? result.entries : []);
@@ -229,7 +232,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
   async function decideWaitingRoom(entryId: string, decision: "admit" | "reject") {
     const response = await fetch(`/api/meetings/${meetingCode}/waiting-room/decision`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-nexmeet-participant-selector": participantSelector },
       body: JSON.stringify({ entryId, decision }),
     });
     if (!response.ok) throw new Error("decision_failed");
@@ -281,7 +284,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
     if (leaving) return;
     setLeaving(true);
     await disconnectAndStopTracks(room);
-    await markParticipantStatus(meetingCode, "left");
+      await markParticipantStatus(meetingCode, participantSelector, "left");
     onLeft();
   }
 
@@ -290,7 +293,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
     setEnding(true);
     setEndError("");
     try {
-      const response = await fetch(`/api/meetings/${meetingCode}/end`, { method: "POST" });
+      const response = await fetch(`/api/meetings/${meetingCode}/end`, { method: "POST", headers: { "x-nexmeet-participant-selector": participantSelector } });
       const result = (await response.json()) as { startedAt?: unknown; endedAt?: unknown; error?: unknown };
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "end_failed");
       meetingEnded.current = true;
@@ -308,7 +311,8 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
     const latestHostKey = await checkCurrentHost();
     setHostCheckPending(false);
     const hostKey = latestHostKey === undefined ? currentHostParticipantKey : latestHostKey;
-    if (hostKey === localParticipant.identity) {
+    const isCurrentHost = hostKey === localParticipant.identity;
+    if (isCurrentHost) {
       setLeavePromptOpen(true);
       return;
     }
@@ -316,7 +320,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
   }
 
   async function toggleScreenShare() {
-    if (screenSharePending || !screenShareSupported) return;
+    if (screenSharePending || !screenShareSupported || room.state !== ConnectionState.Connected) return;
     setScreenSharePending(true);
     try {
       await localParticipant.setScreenShareEnabled(!isScreenShareEnabled, {
@@ -330,7 +334,27 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, startedAt, ac
     }
   }
 
-  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} startedAt={startedAt} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} currentHostParticipantKey={currentHostParticipantKey} reactions={reactions} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} chatOpen={chatOpen} chatUnreadCount={chatUnreadCount} handRaised={handRaised} leaving={leaving || ending || hostCheckPending} onToggleMicrophone={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)} onToggleCamera={() => void localParticipant.setCameraEnabled(!isCameraEnabled)} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => { setPeopleOpen((open) => !open); setChatOpen(false); }} onToggleChat={() => { setChatOpen((open) => !open); setPeopleOpen(false); }} onToggleHand={() => void toggleHand()} onReaction={(reaction) => void sendReaction(reaction)} onLeave={() => void handleLeaveClick()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} currentHostParticipantKey={currentHostParticipantKey} onClose={() => setPeopleOpen(false)} />}<WaitingRoomHostPanel entries={isCurrentHost ? pendingEntries : []} onDecision={async (entryId, decision) => { await decideWaitingRoom(entryId, decision); }} /><ChatPanel open={chatOpen} meetingCode={meetingCode} participants={participants} localParticipant={localParticipant} onClose={() => setChatOpen(false)} onUnreadChange={setChatUnreadCount} /><StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer />{leavePromptOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-5" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#081126] p-5 shadow-2xl"><h2 id="leave-meeting-title" className="text-lg font-semibold text-white">Leave meeting?</h2><p className="mt-2 text-sm text-slate-400">You are the current host.</p>{endError && <p role="alert" className="mt-3 text-sm text-red-200">{endError}</p>}<div className="mt-5 grid gap-2"><button type="button" onClick={() => { setLeavePromptOpen(false); void leaveMeeting(); }} disabled={ending || leaving} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10">Leave meeting</button><button type="button" onClick={() => void endMeeting()} disabled={ending || leaving} className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-400">{ending ? "Ending meeting..." : "End meeting for everyone"}</button><button type="button" onClick={() => { setLeavePromptOpen(false); setEndError(""); }} disabled={ending} className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-white/5">Cancel</button></div></div></div>}</div>;
+  async function toggleMicrophone() {
+    const nextEnabled = !isMicrophoneEnabled;
+    try {
+      await localParticipant.setMicrophoneEnabled(nextEnabled);
+      writeMediaPreferences(meetingCode, { cameraEnabled: isCameraEnabled, microphoneEnabled: nextEnabled });
+    } catch {
+      // Preserve the last successful preference when the device transition fails.
+    }
+  }
+
+  async function toggleCamera() {
+    const nextEnabled = !isCameraEnabled;
+    try {
+      await localParticipant.setCameraEnabled(nextEnabled);
+      writeMediaPreferences(meetingCode, { cameraEnabled: nextEnabled, microphoneEnabled: isMicrophoneEnabled });
+    } catch {
+      // Preserve the last successful preference when the device transition fails.
+    }
+  }
+
+  return <div className="isolate min-h-[100dvh] overflow-hidden bg-[#020817] text-white"><MeetingTopBar title={meetingTitle} shareLink={shareLink} participantCount={participants.length} startedAt={startedAt} /><main className="flex min-h-[calc(100dvh-4rem)] flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-32 sm:pt-6"><MeetingStage localParticipant={localParticipant} remoteParticipants={remoteParticipants} cameraTracks={cameraTracks} screenShareTrack={screenShareTrack} displayName={displayName} cameraEnabled={isCameraEnabled} microphoneEnabled={isMicrophoneEnabled} currentHostParticipantKey={currentHostParticipantKey} reactions={reactions} /></main><MeetingControls microphoneEnabled={isMicrophoneEnabled} cameraEnabled={isCameraEnabled} screenShareEnabled={isScreenShareEnabled} screenSharePending={screenSharePending} screenShareSupported={screenShareSupported} peopleOpen={peopleOpen} chatOpen={chatOpen} chatUnreadCount={chatUnreadCount} handRaised={handRaised} leaving={leaving || ending || hostCheckPending} onToggleMicrophone={() => void toggleMicrophone()} onToggleCamera={() => void toggleCamera()} onToggleScreenShare={() => void toggleScreenShare()} onTogglePeople={() => { setPeopleOpen((open) => !open); setChatOpen(false); }} onToggleChat={() => { setChatOpen((open) => !open); setPeopleOpen(false); }} onToggleHand={() => void toggleHand()} onReaction={(reaction) => void sendReaction(reaction)} onLeave={() => void handleLeaveClick()} />{peopleOpen && <ParticipantsPanel participants={participants} localParticipant={localParticipant} displayName={displayName} currentHostParticipantKey={currentHostParticipantKey} onClose={() => setPeopleOpen(false)} />}<WaitingRoomHostPanel entries={isCurrentHost ? pendingEntries : []} onDecision={async (entryId, decision) => { await decideWaitingRoom(entryId, decision); }} /><ChatPanel open={chatOpen} meetingCode={meetingCode} participantSelector={participantSelector} participants={participants} localParticipant={localParticipant} onClose={() => setChatOpen(false)} onUnreadChange={setChatUnreadCount} /><StartAudio label="Enable meeting audio" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-cyan-300/30 bg-[#081126] px-4 py-3 text-sm font-semibold text-white shadow-xl sm:bottom-24" /><RoomAudioRenderer />{leavePromptOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-5" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#081126] p-5 shadow-2xl"><h2 id="leave-meeting-title" className="text-lg font-semibold text-white">Leave meeting?</h2><p className="mt-2 text-sm text-slate-400">You are the current host.</p>{endError && <p role="alert" className="mt-3 text-sm text-red-200">{endError}</p>}<div className="mt-5 grid gap-2"><button type="button" onClick={() => { setLeavePromptOpen(false); void leaveMeeting(); }} disabled={ending || leaving} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10">Leave meeting</button><button type="button" onClick={() => void endMeeting()} disabled={ending || leaving} className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-400">{ending ? "Ending meeting..." : "End meeting for everyone"}</button><button type="button" onClick={() => { setLeavePromptOpen(false); setEndError(""); }} disabled={ending} className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-white/5">Cancel</button></div></div></div>}</div>;
 }
 
 async function disconnectAndStopTracks(room: Room) {

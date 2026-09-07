@@ -1,6 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { decodeParticipantCookie, hashSessionSecret, PARTICIPANT_SESSION_COOKIE } from "@/lib/participant-session";
+import { hashSessionSecret } from "@/lib/participant-session";
+import { participantSelectorFromRequest, resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ code: string }> };
@@ -44,17 +44,18 @@ function normalizeRows(value: unknown) {
   });
 }
 
-async function getCredentials(code: string) {
+async function getCredentials(code: string, request: Request) {
   const supabase = await createSupabaseServerClient();
-  const credentials = decodeParticipantCookie((await cookies()).get(PARTICIPANT_SESSION_COOKIE)?.value, code);
+  const selector = participantSelectorFromRequest(request);
+  const credentials = selector ? await resolveParticipantCredentials(code, selector, true) : null;
   if (!supabase || !credentials) return null;
   return { supabase, credentials, tokenHash: hashSessionSecret(credentials.rawSecret) };
 }
 
-export async function GET(_: Request, { params }: RouteContext) {
+export async function GET(request: Request, { params }: RouteContext) {
   const { code } = await params;
   if (!validCode(code)) return NextResponse.json({ error: "Meeting not found." }, { status: 404 });
-  const auth = await getCredentials(code);
+  const auth = await getCredentials(code, request);
   if (!auth) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
 
   const { data, error } = await auth.supabase.rpc("get_chat_messages", {
@@ -69,7 +70,7 @@ export async function GET(_: Request, { params }: RouteContext) {
 export async function POST(request: Request, { params }: RouteContext) {
   const { code } = await params;
   if (!validCode(code)) return NextResponse.json({ error: "Meeting not found." }, { status: 404 });
-  const auth = await getCredentials(code);
+  const auth = await getCredentials(code, request);
   if (!auth) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
 
   let body: unknown;

@@ -3,10 +3,10 @@ import { getParticipantAuth, isValidMeetingCode, isUuid, rpcRows, safeTimestamp,
 
 type RouteContext = { params: Promise<{ code: string }> };
 
-export async function GET(_: Request, { params }: RouteContext) {
+export async function GET(request: Request, { params }: RouteContext) {
   const { code } = await params;
   if (!isValidMeetingCode(code)) return NextResponse.json({ error: "Meeting not found." }, { status: 404 });
-  const auth = await getParticipantAuth(code);
+  const auth = await getParticipantAuth(code, request);
   if (!auth) return NextResponse.json({ error: "Your meeting session is invalid or expired." }, { status: 401 });
 
   const { data, error } = await auth.supabase.rpc("get_pending_waiting_room_entries", {

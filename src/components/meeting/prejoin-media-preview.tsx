@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Camera, CameraOff, Mic, MicOff, RefreshCw } from "lucide-react";
+import { readMediaPreferences, writeMediaPreferences } from "@/lib/media-preferences";
 
 type MediaState = "loading" | "ready" | "denied" | "unavailable" | "unsupported" | "error";
 
@@ -10,7 +11,7 @@ export type PrejoinMediaHandle = {
   stop: () => void;
 };
 
-export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName: string }>(function PrejoinMediaPreview({ displayName }, ref) {
+export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName: string; meetingCode: string }>(function PrejoinMediaPreview({ displayName, meetingCode }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -25,6 +26,9 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
   useEffect(() => {
     let cancelled = false;
     const initializeMedia = async () => {
+      const preferences = readMediaPreferences(meetingCode);
+      setCameraEnabled(preferences.cameraEnabled);
+      setMicrophoneEnabled(preferences.microphoneEnabled);
       if (!navigator.mediaDevices?.getUserMedia) {
         setMediaState("unsupported");
         setMessage("Camera and microphone are not supported in this browser.");
@@ -33,13 +37,16 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
 
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        if (!devices.some((device) => device.kind === "videoinput") || !devices.some((device) => device.kind === "audioinput")) {
+        if ((preferences.cameraEnabled && !devices.some((device) => device.kind === "videoinput")) ||
+          (preferences.microphoneEnabled && !devices.some((device) => device.kind === "audioinput"))) {
           setMediaState("unavailable");
           setMessage("No camera or microphone was found.");
           return;
         }
 
-        const nextStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        const nextStream = preferences.cameraEnabled || preferences.microphoneEnabled
+          ? await navigator.mediaDevices.getUserMedia({ audio: preferences.microphoneEnabled, video: preferences.cameraEnabled })
+          : new MediaStream();
         if (cancelled) {
           nextStream.getTracks().forEach((track) => track.stop());
           return;
@@ -47,8 +54,8 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
 
         streamRef.current = nextStream;
         setStream(nextStream);
-        setMicrophoneEnabled(true);
-        setCameraEnabled(true);
+        setMicrophoneEnabled(preferences.microphoneEnabled);
+        setCameraEnabled(preferences.cameraEnabled);
         setCameraError("");
         setMediaState("ready");
         setMessage("");
@@ -75,7 +82,7 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [retryKey]);
+  }, [meetingCode, retryKey]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -99,10 +106,24 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
     },
   }), [cameraEnabled, mediaState, microphoneEnabled, stream]);
 
-  function toggleMicrophone() {
+  async function toggleMicrophone() {
     const nextEnabled = !microphoneEnabled;
-    streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = nextEnabled; });
+    const currentStream = streamRef.current;
+    if (nextEnabled && currentStream && currentStream.getAudioTracks().length === 0) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const audioTrack = audioStream.getAudioTracks()[0];
+        if (!audioTrack) return;
+        currentStream.addTrack(audioTrack);
+        setStream(currentStream);
+      } catch {
+        return;
+      }
+    } else {
+      currentStream?.getAudioTracks().forEach((track) => { track.enabled = nextEnabled; });
+    }
     setMicrophoneEnabled(nextEnabled);
+    writeMediaPreferences(meetingCode, { cameraEnabled, microphoneEnabled: nextEnabled });
   }
 
   async function toggleCamera() {
@@ -114,6 +135,7 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
         streamRef.current?.removeTrack(track);
       });
       setCameraEnabled(false);
+      writeMediaPreferences(meetingCode, { cameraEnabled: false, microphoneEnabled });
       setCameraError("");
       return;
     }
@@ -142,6 +164,7 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
       currentStream.addTrack(videoTrack);
       setStream(currentStream);
       setCameraEnabled(true);
+      writeMediaPreferences(meetingCode, { cameraEnabled: true, microphoneEnabled });
     } catch (error) {
       const errorName = error instanceof DOMException ? error.name : "";
       if (errorName === "NotAllowedError" || errorName === "SecurityError") {
@@ -190,7 +213,7 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
         )}
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <button type="button" onClick={toggleMicrophone} aria-label={microphoneEnabled ? "Turn microphone off" : "Turn microphone on"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:border-slate-300">{microphoneEnabled ? <Mic className="size-4" /> : <MicOff className="size-4" />}{microphoneEnabled ? "Mic on" : "Mic off"}</button>
+        <button type="button" onClick={() => void toggleMicrophone()} aria-label={microphoneEnabled ? "Turn microphone off" : "Turn microphone on"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:border-slate-300">{microphoneEnabled ? <Mic className="size-4" /> : <MicOff className="size-4" />}{microphoneEnabled ? "Mic on" : "Mic off"}</button>
         <button type="button" onClick={() => void toggleCamera()} disabled={cameraPending} aria-label={cameraEnabled ? "Turn camera off" : "Turn camera on"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60">{cameraEnabled ? <Camera className="size-4" /> : <CameraOff className="size-4" />}{cameraPending ? "Starting camera..." : cameraEnabled ? "Camera on" : "Camera off"}</button>
       </div>
     </div>

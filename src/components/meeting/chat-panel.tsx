@@ -26,7 +26,7 @@ function normalizeMessages(value: unknown) {
   });
 }
 
-export function ChatPanel({ open, meetingCode, participants, localParticipant, onClose, onUnreadChange }: { open: boolean; meetingCode: string; participants: Participant[]; localParticipant: Participant; onClose: () => void; onUnreadChange: (count: number) => void }) {
+export function ChatPanel({ open, meetingCode, participantSelector, participants, localParticipant, onClose, onUnreadChange }: { open: boolean; meetingCode: string; participantSelector: string; participants: Participant[]; localParticipant: Participant; onClose: () => void; onUnreadChange: (count: number) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recipient, setRecipient] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -56,7 +56,7 @@ export function ChatPanel({ open, meetingCode, participants, localParticipant, o
       if (inFlight.current) return;
       inFlight.current = true;
       try {
-        const response = await fetch(`/api/meetings/${meetingCode}/chat`, { cache: "no-store" });
+        const response = await fetch(`/api/meetings/${meetingCode}/chat`, { cache: "no-store", headers: { "x-nexmeet-participant-selector": participantSelector } });
         const result = (await response.json()) as ChatResponse;
         if (!response.ok || disposed) return;
         const nextMessages = normalizeMessages(result.messages).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
@@ -94,11 +94,11 @@ export function ChatPanel({ open, meetingCode, participants, localParticipant, o
     setSending(true);
     setError("");
     try {
-      const response = await fetch(`/api/meetings/${meetingCode}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, recipientParticipantKey: effectiveRecipient }) });
+      const response = await fetch(`/api/meetings/${meetingCode}/chat`, { method: "POST", headers: { "Content-Type": "application/json", "x-nexmeet-participant-selector": participantSelector }, body: JSON.stringify({ message, recipientParticipantKey: effectiveRecipient }) });
       const result = (await response.json()) as ChatResponse;
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "send_failed");
       setDraft("");
-      const refresh = await fetch(`/api/meetings/${meetingCode}/chat`, { cache: "no-store" });
+      const refresh = await fetch(`/api/meetings/${meetingCode}/chat`, { cache: "no-store", headers: { "x-nexmeet-participant-selector": participantSelector } });
       const refreshed = (await refresh.json()) as ChatResponse;
       if (refresh.ok) {
         const refreshedMessages = normalizeMessages(refreshed.messages).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));

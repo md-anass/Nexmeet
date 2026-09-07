@@ -23,4 +23,10 @@ Retain premium raised-hand indicator redesign as a future visual task.
 - Mobile-responsive password gate.
 - NexMeet security iconography.
 
+## Locked final redesign goal
+
+After all selected V1 functionality, security, lifecycle hardening, and regression testing are complete, redesign all user-facing NexMeet UI. This includes auth, dashboard, Create Meeting, meeting history, future scheduling and upcoming UI, profile/settings, guest join, password gate, waiting room, prejoin, meeting room, participant grid and tiles, active speaker, meeting controls, participant sidebar, chat, reactions, Raise Hand, host moderation, dialogs, meeting-ended states, loading/error/empty states, and desktop/tablet/mobile layouts.
+
+The final phase must include a premium visual system, purposeful animations and micro-interactions where appropriate, responsive behavior, accessibility, reduced-motion support, and performance constraints. Do not perform this redesign during the current functionality phase.
+
 These are design goals only; no new functionality is implemented here.
