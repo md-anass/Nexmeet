@@ -3,6 +3,7 @@ import { AccessToken, RoomConfiguration } from "livekit-server-sdk";
 import { hashSessionSecret } from "@/lib/participant-session";
 import { expireParticipantCredentials, participantSelectorFromRequest, resolveParticipantCredentials } from "@/lib/participant-session-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizePublicMeeting } from "@/lib/meeting-lifecycle";
 import { booleanValue, firstRpcRow, stringValue } from "@/lib/waiting-room";
 
 type RouteContext = { params: Promise<{ code: string }> };
@@ -55,14 +56,20 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const { data: authData } = await supabase.auth.getUser();
-  const { data: ownerMeeting } = authData.user
-    ? await supabase.from("meetings").select("host_user_id, access_mode, status").eq("public_code", code).maybeSingle()
-    : { data: null };
+  const [{ data: ownerResult, error: ownerError }, { data: publicMeetingData, error: publicMeetingError }] = authData.user
+    ? await Promise.all([
+      supabase.rpc("is_meeting_owner", { requested_public_code: code }),
+      supabase.rpc("get_public_meeting_by_code", { meeting_code: code }).maybeSingle(),
+    ])
+    : [{ data: false, error: null }, { data: null, error: null }];
+  const publicMeeting = normalizePublicMeeting(publicMeetingData);
   const ownerBypass = Boolean(
     authData.user &&
-    ownerMeeting?.host_user_id === authData.user.id &&
-    ownerMeeting.status === "active" &&
-    ownerMeeting.access_mode === "approval_required",
+    !ownerError &&
+    !publicMeetingError &&
+    ownerResult === true &&
+    publicMeeting?.status === "active" &&
+    publicMeeting.accessMode === "approval_required",
   );
 
   const { data: gateData, error: gateError } = await supabase.rpc("can_participant_join_livekit", {
@@ -91,6 +98,19 @@ export async function POST(request: Request, { params }: RouteContext) {
           ? "Request access to join this meeting."
           : "You are not allowed to join this meeting yet.";
     return NextResponse.json({ error: message, status: gateStatus, reason: denialReason }, { status: 403 });
+  }
+
+  const { data: quotaConsumed, error: quotaError } = await supabase.rpc("consume_livekit_token_quota", {
+    requested_participant_key: credentials.participantKey,
+    requested_session_token_hash: tokenHash,
+    requested_meeting_code: code,
+  });
+  if (quotaError) return failure(503, "Unable to connect to the meeting service.");
+  if (quotaConsumed !== true) {
+    return NextResponse.json(
+      { error: "Too many connection attempts. Please wait and try again." },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
   }
 
   const accessToken = new AccessToken(config.apiKey, config.apiSecret, {

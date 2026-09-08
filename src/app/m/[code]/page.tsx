@@ -34,14 +34,12 @@ export default async function MeetingLobbyPage({ params, searchParams }: PagePro
   if (error || !meeting) notFound();
 
   const user = await getAuthenticatedUser();
-  const { data: ownedMeeting } = user
-    ? await supabase.from("meetings").select("host_user_id, started_at, access_mode").eq("public_code", code).maybeSingle()
-    : { data: null };
-  const isHost = Boolean(user && ownedMeeting?.host_user_id === user.id);
-  const accessMode = meeting.accessMode === "approval_required" || ownedMeeting?.access_mode === "approval_required"
-    ? "approval_required"
-    : "everyone";
-  const startedAt = meeting.startedAt ?? ownedMeeting?.started_at ?? null;
+  const { data: ownerResult, error: ownerError } = user
+    ? await supabase.rpc("is_meeting_owner", { requested_public_code: code })
+    : { data: false, error: null };
+  const isHost = Boolean(user && !ownerError && ownerResult === true);
+  const accessMode = meeting.accessMode;
+  const startedAt = meeting.startedAt;
   const hostName = meeting.hostDisplayName?.trim() || "Host";
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
