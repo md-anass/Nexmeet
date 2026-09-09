@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Camera, CameraOff, Mic, MicOff, RefreshCw } from "lucide-react";
 import { readMediaPreferences, writeMediaPreferences } from "@/lib/media-preferences";
+import styles from "./prejoin-media-preview.module.css";
 
 type MediaState = "loading" | "ready" | "denied" | "unavailable" | "unsupported" | "error";
 
@@ -194,27 +195,28 @@ export const PrejoinMediaPreview = forwardRef<PrejoinMediaHandle, { displayName:
 
   if (!isReady) {
     return (
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
-        <div className="mx-auto flex min-h-44 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-5 text-sm text-slate-500">
+      <div className={styles.loadingPanel}>
+        <div className={styles.loadingFrame}>
           {mediaState === "loading" ? "Starting camera and microphone..." : message}
         </div>
-        {mediaState !== "loading" && <button type="button" onClick={retry} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"><RefreshCw className="size-4" />Retry</button>}
+        {mediaState !== "loading" && <button type="button" onClick={retry} className={styles.retry}><RefreshCw aria-hidden="true" />Retry</button>}
       </div>
     );
   }
 
   return (
-    <div className="mt-8">
-      <div className="relative aspect-video overflow-hidden rounded-2xl bg-slate-950">
+    <div className={styles.preview}>
+      <div className={styles.videoFrame}>
         {cameraEnabled ? (
-          <video ref={videoRef} autoPlay muted playsInline className="size-full object-cover mirror" />
+          <video ref={videoRef} autoPlay muted playsInline className={`${styles.video} mirror`} />
         ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-3 px-5 text-center text-white"><div className="flex size-20 items-center justify-center rounded-full bg-white/15 text-2xl font-semibold">{initials}</div><p className="font-medium">{displayName}</p><p className="text-sm text-slate-300">Camera off</p>{cameraError && <><p className="text-sm text-red-200">{cameraError}</p><button type="button" onClick={() => void toggleCamera()} disabled={cameraPending} className="rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white hover:bg-white/25">{cameraPending ? "Retrying..." : "Retry camera"}</button></>}</div>
+          <div className={styles.cameraOff}><div className={styles.avatar}>{initials}</div><p className={styles.cameraOffName}>{displayName}</p><p className={styles.cameraOffText}>Camera off</p>{cameraError && <><p className={styles.cameraError}>{cameraError}</p><button type="button" onClick={() => void toggleCamera()} disabled={cameraPending} className={styles.retrySmall}>{cameraPending ? "Retrying..." : "Retry camera"}</button></>}</div>
         )}
+        {cameraEnabled && <span className={styles.namePill}>{displayName}</span>}
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <button type="button" onClick={() => void toggleMicrophone()} aria-label={microphoneEnabled ? "Turn microphone off" : "Turn microphone on"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:border-slate-300">{microphoneEnabled ? <Mic className="size-4" /> : <MicOff className="size-4" />}{microphoneEnabled ? "Mic on" : "Mic off"}</button>
-        <button type="button" onClick={() => void toggleCamera()} disabled={cameraPending} aria-label={cameraEnabled ? "Turn camera off" : "Turn camera on"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60">{cameraEnabled ? <Camera className="size-4" /> : <CameraOff className="size-4" />}{cameraPending ? "Starting camera..." : cameraEnabled ? "Camera on" : "Camera off"}</button>
+      <div className={styles.controls}>
+        <button type="button" onClick={() => void toggleMicrophone()} aria-label={microphoneEnabled ? "Turn microphone off" : "Turn microphone on"} className={`${styles.control} ${!microphoneEnabled ? styles.controlOff : ""}`}>{microphoneEnabled ? <Mic aria-hidden="true" /> : <MicOff aria-hidden="true" />}{microphoneEnabled ? "Mic on" : "Mic off"}</button>
+        <button type="button" onClick={() => void toggleCamera()} disabled={cameraPending} aria-label={cameraEnabled ? "Turn camera off" : "Turn camera on"} className={`${styles.control} ${!cameraEnabled ? styles.controlOff : ""}`}>{cameraEnabled ? <Camera aria-hidden="true" /> : <CameraOff aria-hidden="true" />}{cameraPending ? "Starting camera..." : cameraEnabled ? "Camera on" : "Camera off"}</button>
       </div>
     </div>
   );

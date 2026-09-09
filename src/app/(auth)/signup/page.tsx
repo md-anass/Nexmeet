@@ -7,5 +7,14 @@ export const dynamic = "force-dynamic";
 
 export default async function SignupPage() {
   if (await getAuthenticatedUser()) redirect("/dashboard");
-  return <AuthShell title="Create your account" description="Set up NexMeet for simple, private conversations."><AuthForm mode="signup" /></AuthShell>;
+
+  return (
+    <AuthShell
+      title="Create your account"
+      description="Set up your workspace and host your first secure meeting in minutes."
+      mode="signup"
+    >
+      <AuthForm mode="signup" />
+    </AuthShell>
+  );
 }

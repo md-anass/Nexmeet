@@ -16,6 +16,9 @@ import { LocalDateTime } from "@/components/shared/local-date-time";
 import { StartScheduledMeetingForm } from "@/components/shared/start-scheduled-meeting-form";
 import { CancelScheduledMeetingForm } from "@/components/shared/cancel-scheduled-meeting-form";
 import { ScheduledMeetingStatusWatcher } from "@/components/shared/scheduled-meeting-status-watcher";
+import { NexMeetLogo } from "@/components/brand/nexmeet-logo";
+import { Globe2, ShieldCheck, Sparkles } from "lucide-react";
+import styles from "./meeting-lobby.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -84,18 +87,33 @@ export default async function MeetingLobbyPage({ params, searchParams }: PagePro
   }
 
   return (
-    <main className="min-h-screen px-6 py-8 sm:px-10">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl flex-col justify-center">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-slate-950">NexMeet</Link>
-        <section className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_24px_70px_rgba(15,23,42,0.07)] sm:p-12">
-          <>
-              <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-slate-500">Meeting lobby</p><h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">{meeting.title}</h1></div>{isHost && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Host</span>}</div>
-              <p className="mt-4 text-sm text-slate-600">Hosted by {hostName}</p>
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <Link href="/" className={styles.brand} aria-label="NexMeet home"><NexMeetLogo size={48} /></Link>
+        <div className={styles.content}>
+          <section className={styles.intro}>
+            <p className={styles.eyebrow}><Sparkles aria-hidden="true" />Your meeting is ready</p>
+            <h1 className={styles.title}>Meet with clarity.<span>Connect with ease.</span></h1>
+            <p className={styles.description}>{isHost ? "Add your name and start the room when you’re ready. Your guests can join from the link you shared." : "Add your name to enter the meeting lobby. You’ll get a chance to prepare your camera and microphone before joining."}</p>
+            <div className={styles.facts} aria-label="Meeting benefits">
+              <span className={styles.fact}><Globe2 aria-hidden="true" />Browser based</span>
+              <span className={styles.fact}><ShieldCheck aria-hidden="true" />Secure access</span>
+            </div>
+          </section>
+          <div className={styles.panelWrap}>
+            <section className={styles.panel} aria-labelledby="meeting-lobby-title">
+              <div className={styles.panelTop}>
+                <div><p className={styles.panelLabel}>Meeting lobby</p><h2 id="meeting-lobby-title" className={styles.meetingTitle}>{meeting.title}</h2><p className={styles.host}>Hosted by <strong>{hostName}</strong></p></div>
+                {isHost && <span className={styles.badge}>Host</span>}
+              </div>
               <GuestJoinForm meetingCode={meeting.publicCode} approvalRequired={accessMode === "approval_required" && !isHost} creatorNewMeeting={isHost && !startedAt} requiresPassword={meeting.requiresPassword && !isHost} />
-              <p className="mt-3 text-center text-xs text-slate-500">Meeting code: <span className="font-semibold tracking-wide text-slate-700">{meeting.publicCode}</span></p>
-              <CopyLinkButton link={shareLink} />
-            </>
-        </section>
+              <div className={styles.share}>
+                <div className={styles.shareHeader}><span>Invite link</span><code className={styles.code}>{meeting.publicCode}</code></div>
+                <CopyLinkButton link={shareLink} variant="lobby" />
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
     </main>
   );

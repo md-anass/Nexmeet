@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -39,7 +40,7 @@ export async function createSupabaseServerClient() {
   });
 }
 
-export async function getAuthenticatedUser() {
+export const getAuthenticatedUser = cache(async () => {
   const supabase = await createSupabaseServerClient();
 
   if (!supabase) {
@@ -53,4 +54,4 @@ export async function getAuthenticatedUser() {
   }
 
   return data.user;
-}
+});

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function CopyLinkButton({ link }: { link: string }) {
+export function CopyLinkButton({ link, variant = "default" }: { link: string; variant?: "default" | "lobby" }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -16,6 +16,16 @@ export function CopyLinkButton({ link }: { link: string }) {
       setFailed(true);
     }
   }
+
+  if (variant === "lobby") return (
+    <div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <output className="min-w-0 flex-1 truncate rounded-xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm text-slate-400">{link}</output>
+        <button type="button" onClick={copyLink} className="min-h-11 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-cyan-300/30 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/20">{copied ? "Copied" : "Copy link"}</button>
+      </div>
+      {failed && <p role="status" className="mt-2 text-sm text-slate-400">Copy is unavailable. You can select the link above.</p>}
+    </div>
+  );
 
   return (
     <div className="mt-6">

@@ -1,8 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
 import { joinMeeting } from "@/app/m/[code]/actions";
 import type { GuestJoinActionState } from "@/types/participant-session";
+import styles from "./guest-join-form.module.css";
 
 const initialState: GuestJoinActionState = { error: "" };
 
@@ -10,15 +12,18 @@ export function GuestJoinForm({ meetingCode, approvalRequired = false, creatorNe
   const [state, formAction, pending] = useActionState(joinMeeting, initialState);
 
   return (
-    <form action={formAction} className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+    <form action={formAction} className={styles.lobbyForm}>
       <input type="hidden" name="meetingCode" value={meetingCode} />
-      <label className="block text-sm font-medium text-slate-700">
+      <label className={styles.label}>
         Your name
-        <input name="displayName" type="text" maxLength={80} placeholder="Enter your name" autoComplete="name" required className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10" />
+        <span className={styles.inputWrap}>
+          <UserRound className={styles.inputIcon} aria-hidden="true" />
+          <input name="displayName" type="text" maxLength={80} placeholder="Enter your name" autoComplete="name" required className={styles.input} />
+        </span>
       </label>
-      {requiresPassword && <p className="mt-3 text-xs text-slate-500">This meeting requires a password after you enter your name.</p>}
-      {state.error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>}
-      <button type="submit" disabled={pending} className="mt-4 w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">{pending ? (creatorNewMeeting ? "Starting..." : "Joining...") : creatorNewMeeting ? "Start Meeting" : approvalRequired ? "Request to Join" : "Join Meeting"}</button>
+      {requiresPassword && <p className={styles.note}><LockKeyhole aria-hidden="true" />This meeting requires a password after you enter your name.</p>}
+      {state.error && <p role="alert" className={styles.error}>{state.error}</p>}
+      <button type="submit" disabled={pending} className={styles.submit}><span>{pending ? (creatorNewMeeting ? "Starting..." : "Joining...") : creatorNewMeeting ? "Start Meeting" : approvalRequired ? "Request to Join" : "Join Meeting"}</span><ArrowRight aria-hidden="true" /></button>
     </form>
   );
 }

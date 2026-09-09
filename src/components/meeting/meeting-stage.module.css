@@ -1,0 +1,133 @@
+.stage {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.stage::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  opacity: .64;
+  background:
+    radial-gradient(circle at 24% 22%, rgba(6, 182, 212, .09), transparent 26rem),
+    radial-gradient(circle at 78% 78%, rgba(124, 58, 237, .10), transparent 28rem);
+}
+
+.grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: clamp(10px, 1.25vw, 18px);
+}
+
+.soloGrid {
+  width: min(100%, 900px);
+  height: auto;
+  max-height: min(68vh, 680px);
+  aspect-ratio: 16 / 9;
+}
+
+.twoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; }
+.fourGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; }
+.manyGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; }
+
+.soloStatus {
+  position: absolute;
+  z-index: 2;
+  bottom: clamp(96px, 11vh, 132px);
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border: 1px solid rgba(125, 211, 252, .16);
+  border-radius: 999px;
+  color: #b7c6da;
+  background: rgba(8, 18, 39, .72);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, .23);
+  font-size: .83rem;
+  font-weight: 600;
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.soloStatus svg { width: 16px; height: 16px; color: #67e8f9; }
+
+.shareStage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: clamp(12px, 1.5vw, 20px);
+}
+
+.sharedScreen {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 22px;
+  background: #070e1d;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+}
+
+.screenLabel {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  color: white;
+  background: rgba(2, 6, 23, .72);
+  font-size: .78rem;
+  font-weight: 650;
+  backdrop-filter: blur(12px);
+}
+
+.filmstrip {
+  display: grid;
+  width: min(25%, 290px);
+  min-width: 190px;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.filmstrip > * { min-height: 0; }
+
+@media (min-width: 1200px) { .manyGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+@media (max-width: 720px) {
+  .stage { align-items: stretch; }
+  .grid { align-content: center; }
+  .soloGrid { width: 100%; max-height: none; }
+  .soloStatus { bottom: calc(84px + env(safe-area-inset-bottom)); max-width: calc(100% - 32px); padding: 9px 12px; font-size: .76rem; white-space: nowrap; }
+  .shareStage { flex-direction: column; }
+  .filmstrip { display: flex; width: 100%; min-width: 0; height: 26%; grid-auto-rows: auto; overflow-x: auto; overflow-y: hidden; }
+  .filmstrip > * { width: 180px; flex: 0 0 180px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .grid { animation: stage-arrive 360ms ease-out both; }
+  .soloStatus { animation: status-arrive 460ms 120ms ease-out both; }
+  @keyframes stage-arrive { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes status-arrive { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
+}
+
+@media (prefers-reduced-motion: reduce) { .grid, .soloStatus { animation: none; } }

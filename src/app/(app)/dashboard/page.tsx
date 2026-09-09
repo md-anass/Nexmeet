@@ -1,58 +1,249 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { CreateMeetingForm } from "@/components/shared/create-meeting-form";
+import {
+  ArrowRight,
+  CalendarClock,
+  History,
+  Radio,
+} from "lucide-react";
+import { fetchDashboardData } from "@/lib/dashboard-data";
+import { DashboardInteractiveHub } from "@/components/shared/dashboard-interactive-hub";
+import { DashboardHeroActions } from "@/components/shared/dashboard-actions";
 import { MeetingCard } from "@/components/shared/meeting-card";
-import { ScheduleMeetingForm } from "@/components/shared/schedule-meeting-form";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { Alert, Avatar, EmptyState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
-type OwnedMeeting = { public_code: string; title: string; status: "active" | "scheduled" | "ended" | "cancelled"; created_at: string; started_at: string | null; ended_at: string | null; scheduled_for: string | null; cancelled_at: string | null; access_mode: "everyone" | "approval_required" | string; requires_password: boolean };
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) redirect("/login");
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  const user = authData.user;
-  if (authError || !user) redirect("/login");
-  const [{ data: profile }, { data: meetings, error: meetingsError }] = await Promise.all([
-    supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-    supabase.rpc("get_owned_meetings"),
-  ]);
-  const displayName = profile?.display_name?.trim() || user.email?.split("@")[0] || "there";
-  const ownedMeetings = (Array.isArray(meetings) ? meetings : meetings ? [meetings] : []).flatMap((row) => {
-    if (!row || typeof row !== "object") return [];
-    const value = row as Record<string, unknown>;
-    const status = typeof value.status === "string" ? value.status.trim().toLowerCase() : "";
-    if (!(["active", "scheduled", "ended", "cancelled"] as const).includes(status as OwnedMeeting["status"])) return [];
-    return [{ ...value, status } as OwnedMeeting];
-  });
-  const upcomingMeetings = ownedMeetings
-    .filter((meeting) => meeting.status === "scheduled")
-    .sort((a, b) => Date.parse(a.scheduled_for ?? "") - Date.parse(b.scheduled_for ?? ""));
-  const activeMeetings = ownedMeetings.filter((meeting) => meeting.status === "active");
-  const pastMeetings = ownedMeetings
-    .filter((meeting) => meeting.status === "ended" || meeting.status === "cancelled")
-    .sort((a, b) => Date.parse(b.cancelled_at ?? b.ended_at ?? b.created_at) - Date.parse(a.cancelled_at ?? a.ended_at ?? a.created_at));
+  const {
+    user,
+    displayName,
+    upcomingMeetings,
+    activeMeetings,
+    pastMeetings,
+    counts,
+    meetingsError,
+  } = await fetchDashboardData();
 
   return (
-    <main className="min-h-screen px-6 py-6 sm:px-10">
-      <div className="mx-auto max-w-5xl">
-        <header className="flex items-center justify-between">
-          <Link href="/" className="text-lg font-semibold tracking-tight text-slate-950">NexMeet</Link>
+    <div className="mx-auto w-full max-w-[96rem] space-y-7">
+      {/* COMPACT TOP HEADER */}
+      <header className="flex flex-row items-center justify-between gap-4">
+        <div>
           <div className="flex items-center gap-2">
-            <Link href="/profile" className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-900/5">Profile</Link>
-            <form action="/auth/signout" method="post"><button className="rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Log out</button></form>
+            <span className="size-2 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+            <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+              NexMeet workspace
+            </p>
           </div>
-        </header>
-        <section className="mt-16 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_24px_70px_rgba(15,23,42,0.07)] sm:p-12">
-          <p className="text-sm font-medium text-slate-500">Your NexMeet space</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">{displayName ? `Welcome, ${displayName}` : "Welcome to NexMeet"}</h1>
-          <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">Your private meeting workspace is ready.</p>
-          <CreateMeetingForm />
-          <ScheduleMeetingForm />
-          {meetingsError ? <p className="mt-8 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">We could not load your meetings right now.</p> : <div className="mt-10 space-y-10"><section><h2 className="text-2xl font-semibold text-slate-950">Upcoming Meetings</h2><div className="mt-4 grid gap-4">{upcomingMeetings.length ? upcomingMeetings.map((meeting) => <MeetingCard key={meeting.public_code} meeting={meeting} />) : <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No upcoming meetings yet.</p>}</div></section><section><h2 className="text-2xl font-semibold text-slate-950">Active Meetings</h2><div className="mt-4 grid gap-4">{activeMeetings.length ? activeMeetings.map((meeting) => <MeetingCard key={meeting.public_code} meeting={meeting} />) : <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No active meetings yet.</p>}</div></section><section><h2 className="text-2xl font-semibold text-slate-950">Past Meetings</h2><div className="mt-4 grid gap-4">{pastMeetings.length ? pastMeetings.map((meeting) => <MeetingCard key={meeting.public_code} meeting={meeting} />) : <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No past meetings yet.</p>}</div></section></div>}
-        </section>
-      </div>
-    </main>
+          <h1 className="mt-0.5 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+            Dashboard
+          </h1>
+        </div>
+
+        <Link
+          href="/profile"
+          className="group flex items-center gap-2.5 rounded-xl border border-slate-200/90 bg-white px-3 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow"
+          aria-label="View user profile settings"
+        >
+          <Avatar
+            name={displayName}
+            className="size-8 text-xs ring-1 ring-cyan-500/20"
+          />
+          <div className="hidden sm:block text-left min-w-0">
+            <span className="block max-w-44 truncate text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+              {displayName}
+            </span>
+            <span className="block max-w-44 truncate text-[0.68rem] text-slate-400">
+              {user.email}
+            </span>
+          </div>
+        </Link>
+      </header>
+
+      {/* PREMIUM HERO & QUICK ACTIONS HUB */}
+      <DashboardInteractiveHub
+        displayName={displayName}
+        upcomingCount={counts.upcoming}
+        activeCount={counts.active}
+        historyCount={counts.history}
+      />
+
+      {/* MEETINGS DISPLAY */}
+      {meetingsError ? (
+        <Alert tone="error" className="mt-6">
+          We could not load your meetings right now. Refresh the page to try again.
+        </Alert>
+      ) : (
+        <div className="pt-2">
+          <div className="grid items-start gap-7 lg:grid-cols-12">
+            {/* LEFT / LARGER: UPCOMING MEETINGS */}
+            <section
+              id="upcoming"
+              aria-labelledby="upcoming-heading"
+              className="lg:col-span-7 xl:col-span-8 scroll-mt-24"
+            >
+              <div className="mb-4 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-violet-600">
+                    Next up
+                  </p>
+                  <h2
+                    id="upcoming-heading"
+                    className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 sm:text-xl"
+                  >
+                    Upcoming meetings
+                  </h2>
+                </div>
+
+                {upcomingMeetings.length > 2 && (
+                  <Link
+                    href="/dashboard/upcoming"
+                    className="group inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 transition-colors hover:text-violet-700"
+                  >
+                    <span>View all ({upcomingMeetings.length})</span>
+                    <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                )}
+              </div>
+
+              <div className="grid gap-3.5">
+                {upcomingMeetings.length > 0 ? (
+                  <>
+                    {upcomingMeetings.slice(0, 2).map((meeting, index) => (
+                      <MeetingCard
+                        key={meeting.public_code}
+                        meeting={meeting}
+                        featured={index === 0}
+                      />
+                    ))}
+
+                    {upcomingMeetings.length > 2 && (
+                      <Link
+                        href="/dashboard/upcoming"
+                        className="group flex items-center justify-between rounded-xl border border-violet-100 bg-violet-50/50 p-3.5 text-xs font-semibold text-violet-700 transition hover:border-violet-200 hover:bg-violet-100/60"
+                      >
+                        <span>
+                          +{upcomingMeetings.length - 2} more scheduled{" "}
+                          {upcomingMeetings.length - 2 === 1 ? "meeting" : "meetings"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-violet-800">
+                          <span>See full schedule</span>
+                          <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                      </Link>
+                    )}
+                  </>
+                ) : (
+                  <EmptyState
+                    icon={<CalendarClock className="size-7 text-violet-500" />}
+                    title="No upcoming meetings"
+                    description="You don't have any scheduled meetings yet. Start now or pick a time that works for everyone."
+                    action={<DashboardHeroActions compact />}
+                    className="border border-slate-200/90 bg-white shadow-sm"
+                  />
+                )}
+              </div>
+            </section>
+
+            {/* RIGHT: ACTIVE ROOMS & ARCHIVE SUMMARY */}
+            <div className="lg:col-span-5 xl:col-span-4 space-y-6">
+              {/* ACTIVE ROOMS */}
+              <section
+                id="active"
+                aria-labelledby="active-heading"
+                className="scroll-mt-24"
+              >
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-cyan-700">
+                      In progress
+                    </p>
+                    <h2
+                      id="active-heading"
+                      className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 sm:text-xl"
+                    >
+                      Active rooms
+                    </h2>
+                  </div>
+
+                  {activeMeetings.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 text-[0.68rem] font-bold text-cyan-700">
+                      <span className="relative flex size-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75" />
+                        <span className="relative inline-flex size-2 rounded-full bg-cyan-500" />
+                      </span>
+                      <span>{activeMeetings.length} live</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid gap-3.5">
+                  {activeMeetings.length > 0 ? (
+                    <>
+                      {activeMeetings.slice(0, 2).map((meeting) => (
+                        <div
+                          key={meeting.public_code}
+                          className="rounded-2xl ring-1 ring-cyan-400/30"
+                        >
+                          <MeetingCard meeting={meeting} compact featured />
+                        </div>
+                      ))}
+
+                      {activeMeetings.length > 2 && (
+                        <Link
+                          href="/dashboard/active"
+                          className="group flex items-center justify-between rounded-xl border border-cyan-100 bg-cyan-50/50 p-3 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100/60"
+                        >
+                          <span>+{activeMeetings.length - 2} more active rooms</span>
+                          <span className="inline-flex items-center gap-1">
+                            <span>Open rooms</span>
+                            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                          </span>
+                        </Link>
+                      )}
+                    </>
+                  ) : (
+                    <EmptyState
+                      icon={<Radio className="size-7 text-cyan-500" />}
+                      title="No active meetings"
+                      description="Meetings in progress will appear here in real time."
+                      className="border border-slate-200/90 bg-white shadow-sm"
+                    />
+                  )}
+                </div>
+              </section>
+
+              {/* ARCHIVE SUMMARY CARD */}
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-4.5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">
+                      <History className="size-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        Meeting history
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {pastMeetings.length} past or cancelled{" "}
+                        {pastMeetings.length === 1 ? "meeting" : "meetings"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/dashboard/history"
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <span>View archive</span>
+                    <ArrowRight className="size-3 text-slate-400" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

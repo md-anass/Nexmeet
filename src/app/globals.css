@@ -2,33 +2,86 @@
 
 :root {
   color-scheme: light;
-  --background: 248 249 250;
-  --foreground: 15 23 42;
-  --muted: 71 85 105;
-  --border: 226 232 240;
-  --surface: 255 255 255;
+
+  /* Color system */
+  --nm-page: 247 249 252;
+  --nm-surface: 255 255 255;
+  --nm-surface-elevated: 255 255 255;
+  --nm-surface-secondary: 241 245 249;
+  --nm-meeting-surface: 3 8 23;
+  --nm-meeting-elevated: 8 17 38;
+  --nm-text-primary: 9 20 43;
+  --nm-text-secondary: 55 69 91;
+  --nm-text-muted: 100 116 139;
+  --nm-border: 218 225 235;
+  --nm-border-strong: 190 200 214;
+  --nm-accent-cyan: 6 182 212;
+  --nm-accent-blue: 37 99 235;
+  --nm-accent-violet: 124 58 237;
+  --nm-success: 5 150 105;
+  --nm-warning: 217 119 6;
+  --nm-destructive: 220 38 38;
+
+  /* Typography */
+  --nm-font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  --nm-text-display: clamp(2.5rem, 5vw, 4.75rem);
+  --nm-text-page-heading: clamp(2rem, 3vw, 3rem);
+  --nm-text-section-heading: 1.5rem;
+  --nm-text-card-heading: 1.0625rem;
+  --nm-text-body: 1rem;
+  --nm-text-body-secondary: 0.875rem;
+  --nm-text-caption: 0.75rem;
+  --nm-text-button: 0.875rem;
+
+  /* Spacing */
+  --nm-space-1: 0.25rem;
+  --nm-space-2: 0.5rem;
+  --nm-space-3: 0.75rem;
+  --nm-space-4: 1rem;
+  --nm-space-5: 1.25rem;
+  --nm-space-6: 1.5rem;
+  --nm-space-8: 2rem;
+  --nm-space-10: 2.5rem;
+  --nm-space-12: 3rem;
+  --nm-space-16: 4rem;
+
+  /* Shape, depth, and motion */
+  --nm-radius-sm: 0.5rem;
+  --nm-radius-md: 0.75rem;
+  --nm-radius-lg: 1rem;
+  --nm-radius-xl: 1.25rem;
+  --nm-shadow-sm: 0 1px 2px rgb(9 20 43 / 0.04), 0 6px 18px rgb(9 20 43 / 0.04);
+  --nm-shadow-md: 0 16px 40px rgb(9 20 43 / 0.08);
+  --nm-focus: 37 99 235;
+  --nm-duration-fast: 140ms;
+  --nm-duration-base: 200ms;
+  --nm-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Backward-compatible aliases for existing screens. */
+  --background: var(--nm-page);
+  --foreground: var(--nm-text-primary);
+  --muted: var(--nm-text-secondary);
+  --border: var(--nm-border);
+  --surface: var(--nm-surface);
 }
 
 * {
-  border-color: rgb(var(--border) / 1);
+  border-color: rgb(var(--nm-border) / 1);
 }
 
 html {
   scroll-behavior: smooth;
+  background: rgb(var(--nm-page) / 1);
 }
 
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(15, 23, 42, 0.08), transparent 34%),
-    linear-gradient(180deg, rgb(var(--background) / 1) 0%, rgb(241 245 249 / 1) 100%);
-  color: rgb(var(--foreground) / 1);
-  font-family:
-    "Inter",
-    "Segoe UI",
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
+    radial-gradient(circle at 78% -12%, rgb(var(--nm-accent-blue) / 0.08), transparent 31rem),
+    rgb(var(--nm-page) / 1);
+  color: rgb(var(--nm-text-primary) / 1);
+  font-family: var(--nm-font-sans);
+  text-rendering: optimizeLegibility;
 }
 
 a,
@@ -36,6 +89,112 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(var(--nm-focus) / 0.48);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgb(var(--nm-accent-cyan) / 0.2);
+  color: rgb(var(--nm-text-primary) / 1);
+}
+
+.nm-display {
+  font-size: var(--nm-text-display);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.nm-page-heading {
+  font-size: var(--nm-text-page-heading);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.nm-section-heading {
+  font-size: var(--nm-text-section-heading);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.nm-card-heading {
+  font-size: var(--nm-text-card-heading);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+
+.nm-body {
+  font-size: var(--nm-text-body);
+  line-height: 1.65;
+}
+
+.nm-body-secondary {
+  color: rgb(var(--nm-text-secondary) / 1);
+  font-size: var(--nm-text-body-secondary);
+  line-height: 1.55;
+}
+
+.nm-caption {
+  color: rgb(var(--nm-text-muted) / 1);
+  font-size: var(--nm-text-caption);
+  font-weight: 550;
+  line-height: 1.45;
+}
+
+@keyframes nm-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nm-dialog-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nm-enter-up {
+  animation: nm-enter-up 560ms var(--nm-ease) both;
+}
+
+.nm-enter-delay {
+  animation-delay: 110ms;
+}
+
+.nm-dialog-enter {
+  animation: nm-dialog-enter 160ms var(--nm-ease) both;
+}
+
 .mirror {
   transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
