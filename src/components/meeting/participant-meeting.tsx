@@ -4,9 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext, useTracks } from "@livekit/components-react";
 import { ConnectionState, Room, RoomEvent, Track, type LocalParticipant, type Participant, type RoomEventCallbacks } from "livekit-client";
-import { NexMeetBrand } from "@/components/brand/nexmeet-brand";
 import { NexMeetLogo } from "@/components/brand/nexmeet-logo";
-import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, DoorOpen, ShieldCheck } from "lucide-react";
 import { MeetingControls } from "@/components/meeting/meeting-controls";
 import { MeetingStage } from "@/components/meeting/meeting-stage";
 import { MeetingTopBar } from "@/components/meeting/meeting-top-bar";
@@ -19,6 +18,7 @@ import { formatMeetingDuration } from "@/lib/meeting-lifecycle";
 import { readMediaPreferences, writeMediaPreferences } from "@/lib/media-preferences";
 import { HAND_RAISED_ATTRIBUTE, isReactionType, REACTION_TOPIC, type ReactionType } from "@/components/meeting/meeting-ephemeral";
 import prejoinStyles from "./prejoin-lobby.module.css";
+import endedStyles from "./meeting-ended-screen.module.css";
 
 type ParticipantMeetingProps = { meetingCode: string; meetingTitle: string; displayName: string; startedAt: string | null; participantSelector: string; accessMode?: "everyone" | "approval_required"; autoReconnect?: boolean; autoJoin?: boolean; isHost?: boolean; shareLink?: string };
 type TokenResponse = { token: string; serverUrl: string };
@@ -386,5 +386,5 @@ async function disconnectAndStopTracks(room: Room) {
 
 function MeetingEndedScreen({ meetingTitle, startedAt, endedAt }: { meetingTitle: string; startedAt: string | null; endedAt: string | null }) {
   const router = useRouter();
-  return <main className="flex min-h-[100dvh] items-center justify-center bg-[#020817] px-5 py-10 text-center text-white"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl"><NexMeetBrand className="justify-center" /><p className="mt-8 text-sm font-medium text-cyan-300">{meetingTitle}</p><h1 className="mt-2 text-3xl font-semibold">Meeting ended</h1><p className="mt-5 text-sm text-slate-400">Total duration</p><p className="mt-1 text-3xl font-semibold tabular-nums text-white">{formatMeetingDuration(startedAt, endedAt) ?? "Calculating duration..."}</p><button type="button" onClick={() => router.push("/dashboard")} className="mt-8 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-200">Return to dashboard</button></div></main>;
+  return <main className={endedStyles.page}><div className={endedStyles.shell}><div className={endedStyles.brand}><NexMeetLogo size={52} /></div><section className={endedStyles.panel} aria-labelledby="meeting-ended-title"><div className={endedStyles.icon}><DoorOpen aria-hidden="true" /></div><p className={endedStyles.kicker}>Meeting complete</p><h1 id="meeting-ended-title" className={endedStyles.title}>Until next time.</h1><p className={endedStyles.copy}><span className={endedStyles.meetingName}>{meetingTitle}</span> has ended. Thanks for making time to meet with your people.</p><div className={endedStyles.durationCard}><span>Total duration</span><strong className="tabular-nums">{formatMeetingDuration(startedAt, endedAt) ?? "Calculating duration..."}</strong></div><button type="button" onClick={() => router.push("/dashboard")} className={endedStyles.action}>Return to dashboard<ArrowRight aria-hidden="true" /></button><p className={endedStyles.note}><ShieldCheck aria-hidden="true" />The meeting is now closed to participants.</p></section></div></main>;
 }
