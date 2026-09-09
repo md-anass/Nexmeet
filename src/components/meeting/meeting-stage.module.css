@@ -123,6 +123,16 @@
   .filmstrip > * { width: 180px; flex: 0 0 180px; }
 }
 
+@media (max-width: 640px) {
+  .stage { align-items: stretch; }
+  .grid { height: 100%; align-content: stretch; gap: 10px; }
+  .grid > * { min-height: 0; aspect-ratio: auto; }
+  .soloGrid { width: 100%; max-height: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .twoGrid { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .fourGrid, .manyGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .soloStatus { bottom: 12px; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .grid { animation: stage-arrive 360ms ease-out both; }
   .soloStatus { animation: status-arrive 460ms 120ms ease-out both; }
