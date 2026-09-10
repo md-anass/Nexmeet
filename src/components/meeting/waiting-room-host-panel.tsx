@@ -1,20 +1,9 @@
 "use client";
-
 import { useState } from "react";
-
+import { Check, Clock3, ShieldCheck, UserRound, X } from "lucide-react";
 export type PendingWaitingRoomEntry = { entryId: string; displayName: string; requestedAt: string };
-
 export function WaitingRoomHostPanel({ entries, onDecision }: { entries: PendingWaitingRoomEntry[]; onDecision: (entryId: string, decision: "admit" | "reject") => Promise<void> }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  if (entries.length === 0) return null;
-
-  async function decide(entryId: string, decision: "admit" | "reject") {
-    if (busy) return;
-    setBusy(entryId);
-    setError("");
-    try { await onDecision(entryId, decision); } catch { setError("Unable to update a request. Please try again."); } finally { setBusy(null); }
-  }
-
-  return <section aria-label="Waiting room requests" className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] left-3 z-40 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-cyan-300/20 bg-[#081126]/95 p-4 shadow-2xl backdrop-blur sm:left-auto sm:right-6"><p className="text-sm font-semibold text-white">Waiting room</p><p className="mt-1 text-xs text-slate-400">{entries.length} request{entries.length === 1 ? "" : "s"} waiting</p><div className="mt-3 grid gap-2">{entries.map((entry) => <div key={entry.entryId} className="rounded-xl border border-white/10 bg-white/[0.04] p-3"><p className="truncate text-sm font-medium text-white">{entry.displayName}</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => void decide(entry.entryId, "admit")} disabled={Boolean(busy)} className="flex-1 rounded-lg bg-cyan-400 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">Admit</button><button type="button" onClick={() => void decide(entry.entryId, "reject")} disabled={Boolean(busy)} className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Reject</button></div></div>)}</div>{error && <p role="alert" className="mt-3 text-xs text-red-200">{error}</p>}</section>;
+  const [busy, setBusy] = useState<string | null>(null); const [error, setError] = useState(""); if (entries.length === 0) return null;
+  async function decide(entryId: string, decision: "admit" | "reject") { if (busy) return; setBusy(entryId); setError(""); try { await onDecision(entryId, decision); } catch { setError("Unable to update this request. Please try again."); } finally { setBusy(null); } }
+  return <aside aria-label="Waiting room requests" className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-3 z-40 w-[min(25rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#0b152b]/[.98] text-white shadow-[0_24px_80px_rgba(0,0,0,.5)] backdrop-blur-xl sm:bottom-24 sm:right-6"><header className="flex items-center justify-between border-b border-white/[.08] px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-cyan-300/15 text-cyan-200"><UserRound className="size-5" /></span><div><h2 className="text-sm font-semibold">Waiting room</h2><p className="mt-0.5 text-xs text-slate-400">{entries.length} request{entries.length === 1 ? "" : "s"} to review</p></div></div><span className="rounded-full bg-cyan-300/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-200"><ShieldCheck className="mr-1 inline size-3" />Host</span></header><div className="grid gap-2 p-3">{entries.map((entry) => <div key={entry.entryId} className="rounded-xl bg-white/[.045] p-3"><div className="flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-cyan-400/30 to-violet-500/40 text-sm font-bold">{entry.displayName.trim().slice(0, 1).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-sm font-semibold">{entry.displayName}</p><p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><Clock3 className="size-3" />Ready to join</p></div></div><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => void decide(entry.entryId, "admit")} disabled={Boolean(busy)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-cyan-400 px-3 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50"><Check className="size-3.5" />Admit</button><button type="button" onClick={() => void decide(entry.entryId, "reject")} disabled={Boolean(busy)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/[.06] px-3 py-2.5 text-xs font-bold text-slate-200 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-50"><X className="size-3.5" />Reject</button></div></div>)}</div>{error && <p role="alert" className="px-4 pb-4 text-xs text-red-200">{error}</p>}</aside>;
 }

@@ -134,7 +134,7 @@ function LiveMeetingRoom({ meetingTitle, displayName, meetingCode, participantSe
   const meetingEnded = useRef(false);
   const reactionTimers = useRef<Record<string, number>>({});
   const lastReactionAt = useRef(0);
-  const screenShareSupported = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
+  const screenShareSupported = typeof navigator !== "undefined" && (Boolean(navigator.mediaDevices?.getDisplayMedia) || typeof localParticipant.setScreenShareEnabled === "function");
 
   useEffect(() => {
     const handleAttributesChanged = (_changed: Record<string, string>, participant: Participant | LocalParticipant) => {
