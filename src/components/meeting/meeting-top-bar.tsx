@@ -1,26 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, ShieldCheck, Users } from "lucide-react";
+import { Check, Copy, LockKeyhole, MoreHorizontal, Users } from "lucide-react";
 import { NexMeetLogo } from "@/components/brand/nexmeet-logo";
 import { MeetingTimer } from "@/components/meeting/meeting-timer";
 
-export function MeetingTopBar({ title, meetingCode, shareLink, participantCount, startedAt }: { title: string; meetingCode: string; shareLink: string; participantCount: number; startedAt: string | null }) {
+type Props = { title: string; meetingCode: string; shareLink: string; participantCount: number; startedAt: string | null };
+
+export function MeetingTopBar({ title, meetingCode, shareLink, participantCount, startedAt }: Props) {
   const [copied, setCopied] = useState(false);
-
-  async function copyInvite() {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  return <header className="grid h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-white/[0.08] bg-[#060c1d]/92 px-4 shadow-[0_10px_34px_rgba(0,0,0,.13)] backdrop-blur-xl sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-6">
-    <div className="flex min-w-0 items-center gap-3"><NexMeetLogo markOnly size={32} /><div className="hidden h-8 w-px bg-white/10 sm:block" /><div className="min-w-0"><p className="min-w-0 truncate text-[0.9rem] font-semibold tracking-[-0.02em] text-slate-100">{title}</p><p className="mt-0.5 hidden truncate font-mono text-[0.66rem] font-medium tracking-[0.08em] text-slate-500 sm:block">Code: {meetingCode}</p></div></div>
-    <div className="hidden items-center justify-center gap-3 sm:flex"><span className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-200"><ShieldCheck className="size-4" />Secure meeting</span><span className="h-5 w-px bg-white/10" /><span className="inline-flex rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2 text-slate-200"><MeetingTimer startedAt={startedAt} /></span></div>
-    <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2"><span className="hidden items-center gap-2 rounded-full border border-emerald-300/10 bg-emerald-400/[0.09] px-3 py-1.5 text-xs font-semibold text-emerald-300 lg:inline-flex"><i className="size-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,.9)]" />Connected</span><span className="inline-flex shrink-0 rounded-xl border border-white/10 bg-white/[0.055] px-2 py-2 text-slate-200 sm:hidden"><MeetingTimer startedAt={startedAt} /></span><button type="button" onClick={() => void copyInvite()} title="Copy meeting invite" aria-label="Copy meeting invite" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.055] px-2 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300/25 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-300/60 max-[640px]:hidden sm:px-3">{copied ? <Check className="size-4 text-emerald-300" /> : <Copy className="size-4" />}{copied ? "Copied" : "Share"}</button><span className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.055] px-2 py-2 text-xs font-semibold text-slate-300 max-[640px]:hidden sm:px-3" title={`${participantCount} participant${participantCount === 1 ? "" : "s"}`}><Users className="size-4" />{participantCount}</span></div>
+  async function copyInvite() { try { await navigator.clipboard.writeText(shareLink); setCopied(true); window.setTimeout(() => setCopied(false), 1800); } catch { setCopied(false); } }
+  return <header className="relative z-20 flex h-[58px] shrink-0 items-center justify-between border-b border-white/10 bg-[#050a16]/95 px-3 text-white shadow-[0_8px_30px_rgba(0,0,0,.25)] backdrop-blur-xl sm:px-5">
+    <div className="flex min-w-0 items-center gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-xl border border-cyan-300/20 bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-violet-500/25"><NexMeetLogo markOnly size={27} /></div><div className="min-w-0"><h1 className="truncate text-sm font-semibold tracking-tight text-slate-100 sm:text-[15px]">{title}</h1><p className="truncate font-mono text-[10px] tracking-[.12em] text-slate-500">{meetingCode}</p></div></div>
+    <div className="hidden items-center gap-4 lg:flex"><span className="inline-flex items-center gap-2 text-xs font-medium text-emerald-300"><i className="size-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,.8)]" />Connected</span><span className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-200"><LockKeyhole className="size-3.5" />Secure meeting</span><span className="h-5 w-px bg-white/10" /><span className="font-mono text-xs text-slate-300"><MeetingTimer startedAt={startedAt} /></span></div>
+    <div className="flex items-center gap-1.5"><span className="inline-flex items-center rounded-lg border border-white/10 bg-white/[.04] px-2.5 py-2 font-mono text-xs text-slate-300 sm:px-3"><MeetingTimer startedAt={startedAt} /></span><button type="button" onClick={() => void copyInvite()} aria-label="Copy meeting invite" className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/[.08] px-2.5 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/[.16] focus:outline-none focus:ring-2 focus:ring-cyan-300/60 sm:px-3">{copied ? <Check className="size-4 text-emerald-300" /> : <Copy className="size-4" />}<span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span></button><span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-xs text-slate-300" title={`${participantCount} participants`}><Users className="size-4" />{participantCount}</span><button type="button" aria-label="More meeting options" className="grid size-9 place-items-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/[.08] focus:outline-none focus:ring-2 focus:ring-cyan-300/60"><MoreHorizontal className="size-4" /></button></div>
   </header>;
 }

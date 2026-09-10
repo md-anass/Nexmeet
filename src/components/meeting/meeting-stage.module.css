@@ -7,6 +7,29 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  padding: clamp(8px, 1vw, 12px);
+  background: linear-gradient(145deg, rgba(2, 8, 23, .2), rgba(7, 16, 31, .5));
+}
+
+:global(nav[aria-label="Meeting controls"]) {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 76px;
+  padding: 0 max(12px, env(safe-area-inset-left)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-right));
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 0;
+  background: rgba(5, 11, 24, .95);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, .28);
+}
+
+:global(nav[aria-label="Meeting controls"] > div) {
+  max-width: none;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .stage::before {
@@ -14,10 +37,15 @@
   inset: 0;
   pointer-events: none;
   content: "";
-  opacity: .64;
+  opacity: .82;
   background:
     radial-gradient(circle at 24% 22%, rgba(6, 182, 212, .09), transparent 26rem),
     radial-gradient(circle at 78% 78%, rgba(124, 58, 237, .10), transparent 28rem);
+}
+
+@media (min-width: 641px) {
+  .stage { padding: 10px; }
+  .grid { gap: 8px; }
 }
 
 .grid {
@@ -28,14 +56,15 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  gap: clamp(10px, 1.25vw, 18px);
+  gap: clamp(8px, .7vw, 12px);
 }
 
+.grid > * { border-radius: 14px; }
+
 .soloGrid {
-  width: min(100%, 900px);
-  height: auto;
-  max-height: min(68vh, 680px);
-  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .twoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; }
@@ -80,7 +109,7 @@
   min-height: 0;
   flex: 1;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .16);
+  border: 0;
   border-radius: 22px;
   background: #070e1d;
   box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
@@ -124,7 +153,7 @@
 }
 
 @media (max-width: 640px) {
-  .stage { align-items: stretch; }
+  .stage { align-items: stretch; padding: 6px; }
   .grid { height: 100%; align-content: stretch; gap: 10px; }
   .grid > * { min-height: 0; aspect-ratio: auto; }
   .soloGrid { width: 100%; max-height: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
