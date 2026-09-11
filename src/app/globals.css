@@ -36,12 +36,6 @@ nav[aria-label="Meeting controls"] button {
   nav[aria-label="Meeting controls"] > div > div:nth-child(4) { display: grid !important; grid-template-columns: repeat(6, minmax(0, 1fr)); width: 100%; }
 }
 
-@media (max-width: 639px) {
-  nav[aria-label="Meeting controls"] > div > div:first-child { display: flex !important; }
-  nav[aria-label="Meeting controls"] > div > div:nth-child(2) > button:nth-child(2),
-  nav[aria-label="Meeting controls"] > div > div:nth-child(2) > button:nth-child(3) { display: inline-flex !important; }
-}
-
 /* Borderless meeting canvas: depth comes from tonal surfaces and shadow,
    rather than outlined boxes. */
 body:has(nav[aria-label="Meeting controls"]) header { border-bottom: 0 !important; }
